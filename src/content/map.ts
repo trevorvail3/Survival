@@ -95,8 +95,15 @@ export function generateHome(rng: () => number): Layout {
   let pid = 1;
   const addProp = (kind: Prop["kind"], x: number, y: number, loot?: string) => { props.push({ id: pid++, kind, pos: { x, y }, used: false, ...(loot ? { loot } : {}) }); };
 
+  // A condemned castle: the stone curtain wall still stands (your safe bound),
+  // but the bailey within is half-ruined — cobble and rubble you slowly reclaim.
   const x0 = cx - 9, y0 = cy - 7, x1 = cx + 9, y1 = cy + 7;
-  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) g.set(x, y, x === x0 || x === x1 || y === y0 || y === y1 ? "wall" : "cobble");
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const edge = x === x0 || x === x1 || y === y0 || y === y1;
+    if (edge) { g.set(x, y, "wall"); continue; }
+    const corner = (Math.abs(x - x0) < 3 || Math.abs(x - x1) < 3) && (Math.abs(y - y0) < 3 || Math.abs(y - y1) < 3);
+    g.set(x, y, corner || rng() < 0.28 ? "rubble" : "cobble"); // ruined bailey
+  }
   g.set(cx, y1, "gate"); g.set(cx + 1, y1, "gate");
   addProp("gate", cx, y1);
   for (let y = y1 + 1; y < g.h - 3; y++) { g.set(cx, y, "path"); g.set(cx + 1, y, "path"); }
@@ -223,6 +230,13 @@ export function generateRegion(rng: () => number, def: RegionDef): Layout {
   // elsewhere carve a small pond so every region can be fished.
   if (def.id !== "mire") blob("water", 1, 2, 3, 0.85);
   placeFishpools(g, addProp, rng, nearEntry, 3);
+
+  // Expedition nodes are the higher tier: they demand a gathering level to work
+  // (home nodes are always free). Deeper regions need more skill.
+  const nodeReq = Math.max(0, (def.danger - 1) * 6);
+  if (nodeReq > 0) for (const pr of props) {
+    if (pr.kind === "tree" || pr.kind === "rock" || pr.kind === "herbs" || pr.kind === "fishpool") pr.reqLevel = nodeReq;
+  }
 
   // Enemy spawns, away from the entrance.
   const enemySpawns: { kind: EnemyKind; x: number; y: number; boss?: boolean }[] = [];

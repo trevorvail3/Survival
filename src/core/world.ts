@@ -35,7 +35,7 @@ import { settlementCapacity, SETTLER_NAMES } from "../content/settlement.ts";
 import { pick } from "./rng.ts";
 import { computeMods, nodeUnlocked, SKILLS, xpForNext } from "../content/skills.ts";
 import type { Mods } from "../content/skills.ts";
-import { levelForXp } from "../content/trainskills.ts";
+import { levelForXp, SKILL_META } from "../content/trainskills.ts";
 import type { SkillId } from "../content/trainskills.ts";
 import { weaponDamage, armorSoak, characterPower, rollRarity, rollPower, type Rarity } from "../content/gear.ts";
 
@@ -745,6 +745,10 @@ function resolveInteract(world: World, content: Content, ctx: { rng: () => numbe
   if (pr.used) { out.push({ t: "log", msg: "Nothing left here." }); return; }
   const nodeSkill = NODE_SKILL[pr.kind]; // set only for gather nodes
   const isNode = !!nodeSkill;
+  if (isNode && pr.reqLevel && skillLevel(world, nodeSkill!) < pr.reqLevel) {
+    out.push({ t: "log", msg: `This lode needs ${SKILL_META[nodeSkill!].name} ${pr.reqLevel} to work.` });
+    return;
+  }
   pr.used = true;
   if (isNode) { pr.respawnAt = world.clock + RESOURCE_RESPAWN_MS; out.push({ t: "gather" }); }
   else out.push({ t: "search" });
@@ -877,7 +881,16 @@ export function craft(world: World, content: Content, recipeId: string, out: Gam
   const r = content.recipes.find((x) => x.id === recipeId);
   if (!r || !canCraft(world, content, recipeId)) return false;
   for (const i of r.inputs) removeItem(world.player, i.id, i.qty);
-  addItem(world.player, content, r.out, r.outQty);
+  const outDef = content.items[r.out]!;
+  if (outDef.slot === "body" || outDef.weapon) {
+    // Crafted gear is a reliable COMMON floor — its Power scales with your
+    // processing skill so you're never weaponless. The rarity chase (and the
+    // higher Power) still comes from expedition drops.
+    const power = Math.round(4 + skillLevel(world, recipeSkill(r)) * 0.8);
+    for (let n = 0; n < r.outQty; n++) placeInstance(world, { id: r.out, qty: 1, power, rarity: "common" });
+  } else {
+    addItem(world.player, content, r.out, r.outQty);
+  }
   out.push({ t: "craft", id: r.out });
   grantXp(world, 6, out);
   grantSkillXp(world, recipeSkill(r), r.xp ?? 18, out);

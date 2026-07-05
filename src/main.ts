@@ -83,8 +83,9 @@ app.appendChild(veil);
 
 const LINES = [
   "The plague came to the hold, and the dead would not lie still. The barrows stand open. The living are few.",
-  "You keep one walled steading against the long dark. Rally survivors. Raise the forge. Train your hand to the blade, the bow, the anvil.",
-  "Range out by day for timber, ore, herb and fish — and be behind your walls before the dark. Fall out there, and the wilds keep your haul.",
+  "You hold a condemned castle — its curtain wall still stands, its bailey a ruin. Reclaim it stone by stone: forge, workshop, hall.",
+  "Basic timber, ore and fish are yours at home, and the means to work them. The richer lodes — and the real gear — lie out in the dark.",
+  "Range out by day to gather, fight and loot; be behind your walls before dark. Fall out there, and the wilds keep your unbanked haul.",
   "Three lords hold the rot together. The Pale Prior. The Barrow King. And at the Rotcradle, the Mother of it all.",
 ];
 const linesEl = veil.querySelector<HTMLElement>("#veilLines")!;

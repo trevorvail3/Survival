@@ -209,6 +209,8 @@ export interface Prop {
   loot?: string;
   /** ms clock time a depleted resource node regrows. */
   respawnAt?: number;
+  /** Gathering-skill level required to harvest (expedition nodes; 0/absent at home). */
+  reqLevel?: number;
 }
 
 // ---------------------------------------------------------------------------
