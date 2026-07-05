@@ -190,6 +190,7 @@ export type PropKind =
   | "tree" // gather wood (depletes + regrows)
   | "rock" // gather stone/iron (depletes + regrows)
   | "herbs" // gather herbs/food (depletes + regrows)
+  | "fishpool" // fish the water (depletes + regrows)
   | "survivor" // rescuable settlement member
   | "waystone" // return stone in the wilds (opens the map)
   | "maptable" // the war map in the settlement (choose an expedition)

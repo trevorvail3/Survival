@@ -236,6 +236,13 @@ function drawProp(g: CanvasRenderingContext2D, pr: Prop, now: number): void {
         g.fillStyle = "#a7c04a"; for (let i = -1; i <= 1; i++) { g.beginPath(); g.arc(cx + i * 5, cy - 8, 2, 0, Math.PI * 2); g.fill(); }
       }
       break;
+    case "fishpool":
+      // Concentric ripples on the water's edge; dims while fished out.
+      g.globalAlpha = depleted ? 0.4 : 0.9;
+      g.strokeStyle = "#6f9bb0"; g.lineWidth = 1.4;
+      for (let i = 1; i <= 3; i++) { g.beginPath(); g.arc(cx, cy, i * 3 + Math.sin(now / 500 + i) * 1.2, 0, Math.PI * 2); g.stroke(); }
+      if (!depleted) { g.fillStyle = "#9fc3d4"; g.beginPath(); g.arc(cx, cy, 1.6, 0, Math.PI * 2); g.fill(); }
+      break;
     case "survivor":
       if (!depleted) {
         // A kneeling figure with a faint hopeful glow.

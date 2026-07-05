@@ -232,10 +232,10 @@ export class Game {
     // chest never occludes the live tree behind it.
     const LABELS: Partial<Record<string, string>> = {
       chest: "Search chest", crate: "Search crate", barrel: "Search barrel", remains: "Search remains", cart: "Search wreck",
-      tree: "Fell timber", rock: "Mine stone", herbs: "Gather herbs", survivor: "Rescue survivor",
+      tree: "Fell timber", rock: "Mine stone", herbs: "Gather herbs", fishpool: "Fish the water", survivor: "Rescue survivor",
       forge: "Work the forge", workbench: "Use the workshop", hearth: "Rest until dawn", townboard: "Muster the settlement", waystone: "Read the waystone", maptable: "Study the war map", stash: "Open storage",
     };
-    const CONSUMED = new Set(["chest", "crate", "barrel", "remains", "cart", "survivor", "tree", "rock", "herbs"]);
+    const CONSUMED = new Set(["chest", "crate", "barrel", "remains", "cart", "survivor", "tree", "rock", "herbs", "fishpool"]);
     let pd = 0.8; let label: string | null = null;
     for (const pr of this.world.props) {
       if (!LABELS[pr.kind]) continue;

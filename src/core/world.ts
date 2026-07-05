@@ -725,14 +725,17 @@ function resolveInteract(world: World, content: Content, ctx: { rng: () => numbe
   }
   // Searchable / gatherable.
   if (pr.used) { out.push({ t: "log", msg: "Nothing left here." }); return; }
-  const isNode = pr.kind === "tree" || pr.kind === "rock" || pr.kind === "herbs";
+  const nodeSkill = NODE_SKILL[pr.kind]; // set only for gather nodes
+  const isNode = !!nodeSkill;
   pr.used = true;
   if (isNode) { pr.respawnAt = world.clock + RESOURCE_RESPAWN_MS; out.push({ t: "gather" }); }
   else out.push({ t: "search" });
   const drops = rollLoot(ctx.rng, pr.loot ?? pr.kind);
   if (drops.length === 0) { out.push({ t: "log", msg: "Empty." }); return; }
   const pm = playerMods(world.player);
-  const bonus = isNode ? pm.gatherBonus : pm.lootLuck; // Forager / Scavenger
+  // Gathering skill: a higher level in the node's skill draws out more each time.
+  const skillBonus = nodeSkill ? Math.floor(skillLevel(world, nodeSkill) / 12) : 0;
+  const bonus = (isNode ? pm.gatherBonus : pm.lootLuck) + skillBonus; // Forager / Scavenger
   for (const d of drops) {
     const qty = d.qty + bonus;
     const left = addItem(world.player, content, d.id, qty);
@@ -741,11 +744,13 @@ function resolveInteract(world: World, content: Content, ctx: { rng: () => numbe
     if (left > 0) spawnGround(world, d.id, left, pr.pos.x + 0.5, pr.pos.y + 0.5);
   }
   grantXp(world, isNode ? 4 : 6, out);
-  if (isNode) {
-    const skill: SkillId | null = pr.kind === "tree" ? "woodcutting" : pr.kind === "rock" ? "mining" : pr.kind === "herbs" ? "herblore" : null;
-    if (skill) grantSkillXp(world, skill, 16, out);
-  }
+  if (nodeSkill) grantSkillXp(world, nodeSkill, nodeSkill === "fishing" ? 14 : 16, out);
 }
+
+/** Which trainable skill each gather-node prop trains (absent = not a node). */
+const NODE_SKILL: Partial<Record<Prop["kind"], SkillId>> = {
+  tree: "woodcutting", rock: "mining", herbs: "herblore", fishpool: "fishing",
+};
 
 export function restAtHearth(world: World, content: Content, rng: () => number, out: GameEvent[]): void {
   const p = world.player;
@@ -780,7 +785,7 @@ export function useSlot(world: World, content: Content, slotIndex: number, out: 
   const heal = playerMods(p).healMult; // Field Medic
   switch (def.use) {
     case "heal": p.hp = Math.min(p.maxHp, p.hp + (def.heal ?? 0) * heal); removeItem(p, slot.id, 1); out.push({ t: "heal" }); break;
-    case "food": p.hunger = Math.min(100, p.hunger + (def.food ?? 0)); removeItem(p, slot.id, 1); out.push({ t: "eat" }); break;
+    case "food": p.hunger = Math.min(100, p.hunger + (def.food ?? 0)); if (def.heal) p.hp = Math.min(p.maxHp, p.hp + def.heal * heal); removeItem(p, slot.id, 1); out.push({ t: "eat" }); break;
     case "drink": p.thirst = Math.min(100, p.thirst + (def.drink ?? 0)); removeItem(p, slot.id, 1); out.push({ t: "drink" }); break;
     case "cure":
       p.infection = Math.max(0, p.infection - (def.cure ?? 0));
