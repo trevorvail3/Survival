@@ -12,6 +12,7 @@ export class Input {
   private clickX = 0;
   private clickY = 0;
   private clicked = false;
+  private rightClicked = false;
   private pressedKeys = new Set<string>();
   private downKeys = new Set<string>();
 
@@ -22,6 +23,7 @@ export class Input {
       this.mouseY = e.clientY - r.top;
     });
     canvas.addEventListener("mousedown", (e) => {
+      if (e.button === 2) { this.rightClicked = true; return; }
       if (e.button !== 0) return;
       const r = canvas.getBoundingClientRect();
       this.clickX = e.clientX - r.left;
@@ -44,6 +46,8 @@ export class Input {
     this.clicked = false;
     return { x: this.clickX, y: this.clickY };
   }
+  /** Consume a pending right-click (used for dodge). */
+  consumeRight(): boolean { const c = this.rightClicked; this.rightClicked = false; return c; }
   pressed(k: string): boolean { return this.pressedKeys.has(k); }
   endFrame(): void { this.pressedKeys.clear(); }
 }

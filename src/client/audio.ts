@@ -16,7 +16,7 @@ export type Sfx =
   | "melee" | "hit" | "crit" | "bowshot" | "dryfire" | "throw" | "explode"
   | "pickup" | "craft" | "build" | "recruit" | "gather" | "heal" | "eat"
   | "drink" | "search" | "equip" | "click" | "hurt" | "death"
-  | "nightfall" | "daybreak" | "lowhp" | "levelup";
+  | "nightfall" | "daybreak" | "lowhp" | "levelup" | "dodge";
 
 export type CreatureVoice = "risen" | "hound" | "wretch" | "revenant" | "graveking" | "prior";
 export type SceneKey = "menu" | "day" | "night";
@@ -271,6 +271,10 @@ class AudioManager {
         case "gather":
           this.noise({ dur: 0.18, peak: 0.2, hp: 300, lp: 2400 });
           this.tone({ f0: 180, f1: 120, dur: 0.14, peak: 0.14, type: "sine" });
+          break;
+        case "dodge": // a quick cloth-and-air whoosh
+          this.noise({ dur: 0.22, peak: 0.18, hp: 900, lp: 5000 });
+          this.tone({ f0: 360, f1: 150, dur: 0.18, peak: 0.08, type: "sine" });
           break;
         case "throw":
           this.noise({ dur: 0.22, peak: 0.14, hp: 700, lp: 3000 });

@@ -13,6 +13,7 @@ import {
   assignRole,
   build,
   craft,
+  dodge,
   isStation,
   orderAttack,
   orderInteract,
@@ -98,6 +99,13 @@ export class Game {
 
     const click = this.input.consumeClick();
     if (click && p.alive && !this.hud.isModalOpen) this.handleClick(click.x, click.y);
+
+    // Dodge: Space or right-click, rolling toward the cursor.
+    const wantDodge = this.input.consumeRight() || this.input.pressed(" ");
+    if (wantDodge && p.alive && !this.hud.isModalOpen) {
+      const aim = this.screenToWorld(this.input.mouseX, this.input.mouseY);
+      dodge(this.world, aim.x, aim.y, this.events);
+    }
 
     for (let i = 0; i < HOTBAR.length; i++) {
       if (this.input.pressed(String(i + 1))) this.useHotbar(HOTBAR[i]!, now);
@@ -278,6 +286,7 @@ export class Game {
       switch (e.t) {
         case "melee": audio.play("melee"); break;
         case "bowshot": audio.play("bowshot"); this.fx.muzzle(p.pos.x, p.pos.y, p.facing); break;
+        case "dodge": audio.play("dodge"); this.fx.sparks(e.x, e.y, "#b8c2cc", 5); break;
         case "noammo": audio.play("dryfire"); this.hud.pushLog("Out of arrows."); break;
         case "hit": audio.play(e.crit ? "crit" : "hit"); this.fx.blood(e.x, e.y, e.crit ? 16 : 9); this.fx.float(e.x, e.y - 0.4, String(e.dmg), e.crit ? "#ff6a4a" : "#e8d8b0", e.crit ? 17 : 13); break;
         case "throw": audio.play("throw"); break;

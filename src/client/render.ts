@@ -372,6 +372,13 @@ function drawEnemy(g: CanvasRenderingContext2D, e: Enemy, now: number): void {
   g.fillStyle = "rgba(190,210,120,0.85)";
   g.beginPath(); g.arc(R(-size * 0.2), R(-size * 0.75), R(0.04), 0, Math.PI * 2); g.arc(R(size * 0.2), R(-size * 0.75), R(0.04), 0, Math.PI * 2); g.fill();
   g.restore();
+
+  // Overhead health bar for wounded rank-and-file (bosses use the big HUD bar).
+  if (!e.boss && e.hp < e.maxHp) {
+    const bw = TILE * 0.7, bx = cx - bw / 2, by = cy - TILE * 0.62;
+    g.fillStyle = "rgba(0,0,0,0.6)"; g.fillRect(bx - 1, by - 1, bw + 2, 5);
+    g.fillStyle = "#8e2b23"; g.fillRect(bx, by, bw * Math.max(0, e.hp / e.maxHp), 3);
+  }
 }
 
 function drawGround(g: CanvasRenderingContext2D, gi: GroundItem, now: number): void {
@@ -417,7 +424,30 @@ export function drawWorld(
   }
 
   const p = world.player;
+
+  // Target reticle around the foe you're locked onto.
+  const ord = p.order;
+  if (ord.type === "attack") {
+    const tgt = world.enemies.find((e) => e.id === ord.enemyId && e.state !== "dead");
+    if (tgt) {
+      const rx = tgt.pos.x * TILE, ry = tgt.pos.y * TILE, rr2 = TILE * 0.62;
+      g.strokeStyle = "rgba(200,60,44,0.9)"; g.lineWidth = 2;
+      const t = now / 500;
+      for (let i = 0; i < 4; i++) {
+        const a = t + (i * Math.PI) / 2;
+        g.beginPath();
+        g.arc(rx, ry, rr2, a, a + 0.6);
+        g.stroke();
+      }
+    }
+  }
+
   if (p.alive) {
+    // Dodge i-frame flash: a pale ring while invulnerable.
+    if (world.clock < p.invulnUntil) {
+      g.strokeStyle = "rgba(180,210,235,0.7)"; g.lineWidth = 2.5;
+      g.beginPath(); g.arc(p.pos.x * TILE, p.pos.y * TILE, TILE * 0.5, 0, Math.PI * 2); g.stroke();
+    }
     const anim: AvatarAnim = { now, moving: p.path.length > 0 };
     const since = p.nextAttack - world.clock;
     if (since > 0) anim.swing = Math.min(1, Math.max(0, since / 240));
