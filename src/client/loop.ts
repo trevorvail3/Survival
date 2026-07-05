@@ -8,8 +8,9 @@
  * as in the sibling `world` project.
  */
 
-import type { Content, ItemId, StructureId, World } from "../core/types.ts";
+import type { Content, ItemId, SettlerRole, StructureId, World } from "../core/types.ts";
 import {
+  assignRole,
   build,
   craft,
   isStation,
@@ -101,7 +102,7 @@ export class Game {
     if (this.pendingStation != null && p.order.type === "none") {
       const pr = world.props.find((x) => x.id === this.pendingStation);
       if (pr && Math.hypot(pr.pos.x + 0.5 - p.pos.x, pr.pos.y + 0.5 - p.pos.y) < 1.8) {
-        if (pr.kind === "hearth") { restAtHearth(world, this.events); this.dispatch(this.events, now); this.events.length = 0; this.hud.showBanner("Rest", "The hearth holds the dark back.", 1600); }
+        if (pr.kind === "hearth") { restAtHearth(world, this.content, this.rng, this.events); this.dispatch(this.events, now); this.events.length = 0; }
         else if (pr.kind === "townboard") this.hud.openSettlement();
         else if (pr.kind === "waystone") this.hud.openTravel();
         else if (pr.kind === "forge" || pr.kind === "workbench") this.hud.openPack();
@@ -170,7 +171,32 @@ export class Game {
   }
 
   private hoverPrompt(): string | null {
-    return null; // prompts handled via the click-ping; keep the HUD uncluttered
+    if (!this.world.player.alive || this.hud.isModalOpen) return null;
+    const m = this.screenToWorld(this.input.mouseX, this.input.mouseY);
+    // A foe under the cursor?
+    let fd = 0.7, foeName: string | null = null;
+    for (const e of this.world.enemies) {
+      if (e.state === "dead") continue;
+      const d = Math.hypot(e.pos.x - m.x, e.pos.y - m.y);
+      if (d < fd) { fd = d; foeName = this.content.enemies[e.kind].name; }
+    }
+    if (foeName) return `Fight ${foeName}`;
+    // A prop? Skip depleted searchables/nodes/rescued survivors so a spent
+    // chest never occludes the live tree behind it.
+    const LABELS: Partial<Record<string, string>> = {
+      chest: "Search chest", crate: "Search crate", barrel: "Search barrel", remains: "Search remains", cart: "Search wreck",
+      tree: "Fell timber", rock: "Mine stone", herbs: "Gather herbs", survivor: "Rescue survivor",
+      forge: "Work the forge", workbench: "Use the workshop", hearth: "Rest until dawn", townboard: "Muster the settlement", waystone: "Travel the ways",
+    };
+    const CONSUMED = new Set(["chest", "crate", "barrel", "remains", "cart", "survivor", "tree", "rock", "herbs"]);
+    let pd = 0.8; let label: string | null = null;
+    for (const pr of this.world.props) {
+      if (!LABELS[pr.kind]) continue;
+      if (pr.used && CONSUMED.has(pr.kind)) continue;
+      const d = Math.hypot(pr.pos.x + 0.5 - m.x, pr.pos.y + 0.5 - m.y);
+      if (d < pd) { pd = d; label = LABELS[pr.kind]!; }
+    }
+    return label;
   }
 
   private useHotbar(id: ItemId, now: number): void {
@@ -191,6 +217,7 @@ export class Game {
     return {
       onCraft: (recipeId: string) => { const ev: GameEvent[] = []; if (craft(this.world, this.content, recipeId, ev)) this.dispatch(ev, performance.now()); },
       onBuild: (id: StructureId) => { const ev: GameEvent[] = []; if (build(this.world, this.content, id, ev)) this.dispatch(ev, performance.now()); },
+      onAssign: (role: SettlerRole, delta: number) => { assignRole(this.world, role, delta); },
       onEquip: (id: ItemId) => { const ev: GameEvent[] = []; useSlotById(this.world, this.content, id, ev); this.dispatch(ev, performance.now()); },
       onUseSlot: (i: number) => { const ev: GameEvent[] = []; useSlot(this.world, this.content, i, ev); this.dispatch(ev, performance.now()); },
       onTravel: (regionId: string) => {

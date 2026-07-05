@@ -301,9 +301,17 @@ function drawEnemy(g: CanvasRenderingContext2D, e: Enemy, now: number): void {
     case "risen": body = "#3f4a34"; head = "#5a6a48"; size = 0.32; break;
     case "wretch": body = "#5a4a3a"; head = "#7a6a4a"; size = 0.46; break;
     case "revenant": body = "#4a4e54"; head = "#6a707a"; size = 0.44; break;
+    case "graveking": body = "#33373e"; head = "#565d66"; size = 0.72; break;
     default: body = "#444"; head = "#666"; size = 0.32;
   }
   if (hurt) body = "#8e2b23";
+
+  // The boss drags a baleful red aura.
+  if (e.kind === "graveking") {
+    const aura = discSprite("kingaura", 64, [[0, "rgba(180,30,20,0.4)"], [1, "rgba(180,30,20,0)"]]);
+    const s = R(1.6);
+    g.drawImage(aura, -s, -s, s * 2, s * 2);
+  }
 
   g.fillStyle = body; g.strokeStyle = "rgba(0,0,0,0.42)"; g.lineWidth = R(0.03);
   g.beginPath(); g.ellipse(0, 0, R(size), R(size * 1.15), 0, 0, Math.PI * 2); g.fill(); g.stroke();
@@ -321,6 +329,17 @@ function drawEnemy(g: CanvasRenderingContext2D, e: Enemy, now: number): void {
     // A dented helm + faint blade.
     g.fillStyle = "#33373c"; g.beginPath(); g.arc(0, R(-size * 0.72), R(size * 0.5), Math.PI, Math.PI * 2); g.fill();
     g.strokeStyle = "#7d858c"; g.lineWidth = R(0.05); g.beginPath(); g.moveTo(R(size * 0.7), R(-0.1)); g.lineTo(R(size * 0.7), R(-0.7)); g.stroke();
+  }
+  if (e.kind === "graveking") {
+    // Iron helm, a jagged crown, and a great blade.
+    g.fillStyle = "#2a2d33"; g.beginPath(); g.arc(0, R(-size * 0.72), R(size * 0.5), Math.PI, Math.PI * 2); g.fill();
+    g.fillStyle = "#c8922e";
+    g.beginPath();
+    const cy2 = R(-size * 1.05), cw = R(size * 0.5);
+    g.moveTo(-cw, cy2 + R(0.12)); g.lineTo(-cw, cy2); g.lineTo(-cw * 0.5, cy2 + R(0.1)); g.lineTo(0, cy2 - R(0.06)); g.lineTo(cw * 0.5, cy2 + R(0.1)); g.lineTo(cw, cy2); g.lineTo(cw, cy2 + R(0.12));
+    g.closePath(); g.fill();
+    g.strokeStyle = "#b9c0c8"; g.lineWidth = R(0.08); g.lineCap = "round";
+    g.beginPath(); g.moveTo(R(size * 0.85), R(0.2)); g.lineTo(R(size * 0.85), R(-1.0)); g.stroke();
   }
   g.fillStyle = "rgba(190,210,120,0.85)";
   g.beginPath(); g.arc(R(-size * 0.2), R(-size * 0.75), R(0.04), 0, Math.PI * 2); g.arc(R(size * 0.2), R(-size * 0.75), R(0.04), 0, Math.PI * 2); g.fill();

@@ -56,6 +56,36 @@ export const LOOT: Record<string, LootEntry[]> = {
     { id: "herb", chance: 1, min: 1, max: 3 },
     { id: "bread", chance: 0.2, min: 1, max: 1 },
   ],
+  // --- Region-flavoured chest tables (each region rewards something different) ---
+  woods_chest: [
+    { id: "wood", chance: 0.7, min: 2, max: 4 },
+    { id: "cloth", chance: 0.5, min: 1, max: 3 },
+    { id: "herb", chance: 0.4, min: 1, max: 2 },
+    { id: "poultice", chance: 0.3, min: 1, max: 1 },
+    { id: "leather", chance: 0.25, min: 1, max: 1 },
+  ],
+  abbey_chest: [
+    { id: "iron", chance: 0.5, min: 1, max: 3 },
+    { id: "cloth", chance: 0.5, min: 2, max: 4 },
+    { id: "poultice", chance: 0.45, min: 1, max: 2 },
+    { id: "arrow", chance: 0.4, min: 4, max: 12 },
+    { id: "oil", chance: 0.3, min: 1, max: 2 },
+    { id: "leather_armor", chance: 0.08, min: 1, max: 1 }, // a rare piece of gear
+  ],
+  mire_chest: [
+    { id: "herb", chance: 0.7, min: 2, max: 4 },
+    { id: "oil", chance: 0.5, min: 1, max: 3 },
+    { id: "waterskin", chance: 0.35, min: 1, max: 1 },
+    { id: "leather", chance: 0.4, min: 1, max: 2 },
+    { id: "antidote", chance: 0.2, min: 1, max: 1 },
+  ],
+  barrows_chest: [
+    { id: "iron", chance: 0.8, min: 2, max: 5 },
+    { id: "leather", chance: 0.4, min: 1, max: 3 },
+    { id: "oil", chance: 0.3, min: 1, max: 2 },
+    { id: "iron_sword", chance: 0.12, min: 1, max: 1 }, // forged gear, found not made
+    { id: "mail", chance: 0.08, min: 1, max: 1 },
+  ],
   // Kill drops.
   kill_common: [
     { id: "bone", chance: 0.3, min: 1, max: 1 },
@@ -66,6 +96,14 @@ export const LOOT: Record<string, LootEntry[]> = {
     { id: "iron", chance: 1, min: 2, max: 5 },
     { id: "leather", chance: 0.6, min: 1, max: 2 },
     { id: "poultice", chance: 0.5, min: 1, max: 2 },
+  ],
+  // The Barrow King — a hoard, and the makings of the finest gear.
+  kill_graveking: [
+    { id: "iron", chance: 1, min: 12, max: 20 },
+    { id: "leather", chance: 1, min: 4, max: 8 },
+    { id: "steel_sword", chance: 0.5, min: 1, max: 1 },
+    { id: "plate", chance: 0.4, min: 1, max: 1 },
+    { id: "poultice", chance: 1, min: 2, max: 4 },
   ],
 };
 

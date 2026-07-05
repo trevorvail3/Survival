@@ -19,6 +19,7 @@ import type {
   ItemId,
   Player,
   Prop,
+  SettlerRole,
   StructureId,
   Vec2,
   World,
@@ -188,11 +189,12 @@ export function createWorld(content: Content, rng: () => number): World {
     enemies: [],
     ground: [],
     props: layout.props,
-    settlement: { structures: { palisade: 1, forge: 0, workshop: 0, quarters: 1 }, population: 0 },
+    settlement: { structures: { palisade: 1, forge: 0, workshop: 0, quarters: 1 }, population: 0, roles: { gatherer: 0, forager: 0, guard: 0 } },
     home: layout.home,
     zoneId: "home",
     entry: { ...layout.playerStart },
     homeCache: null,
+    bossesSlain: [],
     timeOfDay: 0.28,
     day: 1,
     clock: 0,
@@ -203,8 +205,12 @@ export function createWorld(content: Content, rng: () => number): World {
 }
 
 /** Build the live Enemy list for a freshly-generated region. */
-function buildEnemies(world: World, content: Content, spawns: { kind: EnemyKind; x: number; y: number }[]): Enemy[] {
-  return spawns.map((s) => makeEnemy(world, content, s.kind, s.x + 0.5, s.y + 0.5));
+function buildEnemies(world: World, content: Content, spawns: { kind: EnemyKind; x: number; y: number; boss?: boolean }[]): Enemy[] {
+  return spawns.map((s) => {
+    const e = makeEnemy(world, content, s.kind, s.x + 0.5, s.y + 0.5);
+    if (s.boss) e.boss = true;
+    return e;
+  });
 }
 
 /**
@@ -237,7 +243,9 @@ export function travelTo(world: World, content: Content, rng: () => number, targ
     if (!def) return false;
     const layout = generateRegion(rng, def);
     world.map = layout.map; world.props = layout.props; world.ground = [];
-    world.enemies = buildEnemies(world, content, layout.enemySpawns ?? []);
+    // A boss that has already been slain this run does not return.
+    const spawns = (layout.enemySpawns ?? []).filter((s) => !(s.boss && world.bossesSlain.includes(s.kind)));
+    world.enemies = buildEnemies(world, content, spawns);
     world.entry = { ...layout.playerStart };
     out.push({ t: "log", msg: `You set out for ${def.name}.` });
   }
@@ -403,8 +411,12 @@ function damageEnemy(world: World, content: Content, ctx: { rng: () => number },
   if (e.hp <= 0) {
     e.state = "dead";
     out.push({ t: "kill", kind: e.kind, x: e.pos.x, y: e.pos.y });
-    const table = e.kind === "revenant" ? "kill_revenant" : "kill_common";
+    const table = e.kind === "graveking" ? "kill_graveking" : e.kind === "revenant" ? "kill_revenant" : "kill_common";
     for (const d of rollLoot(ctx.rng, table)) spawnGround(world, d.id, d.qty, e.pos.x, e.pos.y);
+    if (e.boss) {
+      if (!world.bossesSlain.includes(e.kind)) world.bossesSlain.push(e.kind);
+      out.push({ t: "log", msg: "The Barrow King falls. His hoard is yours." });
+    }
     void content;
   } else if (e.state === "idle" || e.state === "wander") {
     e.state = "hunt";
@@ -480,14 +492,24 @@ function resolveInteract(world: World, content: Content, ctx: { rng: () => numbe
   }
 }
 
-export function restAtHearth(world: World, out: GameEvent[]): void {
+export function restAtHearth(world: World, content: Content, rng: () => number, out: GameEvent[]): void {
   const p = world.player;
+  // You bed down for the NIGHT — resting is what carries you to dawn. This is
+  // also what stops the hearth being spam-clicked for free heals + tribute:
+  // once you rest it is day again, and you cannot rest until the next night.
+  if (!isNight(world.timeOfDay)) {
+    out.push({ t: "log", msg: "No need to rest yet — the dead come by night." });
+    return;
+  }
   p.hp = p.maxHp;
   p.hunger = Math.max(0, p.hunger - 10);
   p.thirst = Math.max(0, p.thirst - 12);
   p.infection = Math.max(0, p.infection - 40);
+  // Sleeping through to dawn: a day passes and your settlers bring their tribute.
   world.timeOfDay = 0.28;
-  out.push({ t: "log", msg: "You rest by the hearth. Dawn returns." });
+  world.day++;
+  deliverTribute(world, content, rng, out);
+  out.push({ t: "dayBreak", day: world.day });
 }
 
 // ---------------------------------------------------------------------------
@@ -555,6 +577,19 @@ export function craft(world: World, content: Content, recipeId: string, out: Gam
   return true;
 }
 
+/** Settlers not yet put to a task. */
+export function idleSettlers(world: World): number {
+  const r = world.settlement.roles;
+  return world.settlement.population - r.gatherer - r.forager - r.guard;
+}
+
+/** Move a settler to/from a role (delta +1 assign, -1 unassign). */
+export function assignRole(world: World, role: SettlerRole, delta: number): void {
+  const r = world.settlement.roles;
+  if (delta > 0 && idleSettlers(world) > 0) r[role]++;
+  else if (delta < 0 && r[role] > 0) r[role]--;
+}
+
 export function canBuild(world: World, content: Content, id: StructureId): boolean {
   const def = content.structures[id];
   const level = world.settlement.structures[id];
@@ -590,7 +625,7 @@ export function tick(world: World, content: Content, ctx: { now: number; rng: ()
   if (!nowNight && prevNight) {
     world.day++;
     out.push({ t: "dayBreak", day: world.day });
-    deliverTribute(world, content, out);
+    deliverTribute(world, content, ctx.rng, out);
   }
 
   // Regrow depleted resource nodes.
@@ -601,8 +636,8 @@ export function tick(world: World, content: Content, ctx: { now: number; rng: ()
   if (!p.alive) return;
 
   // Survival.
-  p.hunger = Math.max(0, p.hunger - 0.3 * dt);
-  p.thirst = Math.max(0, p.thirst - 0.45 * dt);
+  p.hunger = Math.max(0, p.hunger - 0.26 * dt);
+  p.thirst = Math.max(0, p.thirst - 0.38 * dt);
   let bleed = 0;
   if (p.hunger <= 0) bleed += 2.5;
   if (p.thirst <= 0) bleed += 3.5;
@@ -611,12 +646,21 @@ export function tick(world: World, content: Content, ctx: { now: number; rng: ()
   if (bleed > 0) p.hp -= bleed * dt;
   if (p.hp <= 0 && p.alive) { p.hp = 0; p.alive = false; out.push({ t: "death" }); return; }
 
-  // Night raids — thinned by the Palisade, and never inside the walls.
+  // Night raids — at home, thinned by the Palisade + Guards and kept outside the
+  // walls; in the wilds they come unchecked.
   if (nowNight) {
+    const atHome = world.zoneId === "home";
     const cap = 16 + world.day * 4;
     const alive = world.enemies.filter((e) => e.state !== "dead").length;
-    const palisadeMult = Math.max(0, 1 - world.settlement.structures.palisade * 0.25);
-    if (alive < cap && ctx.rng() < 0.85 * dt * (1 + world.day * 0.12) * palisadeMult) spawnNearPlayer(world, content, ctx);
+    let mult = 1;
+    if (atHome) {
+      const palisadeMult = Math.max(0, 1 - world.settlement.structures.palisade * 0.25);
+      const guardMult = Math.max(0.25, 1 - world.settlement.roles.guard * 0.12);
+      mult = palisadeMult * guardMult;
+    }
+    if (alive < cap && ctx.rng() < 0.85 * dt * (1 + world.day * 0.12) * mult) spawnNearPlayer(world, content, ctx);
+    // The watch looses arrows: guards cull attackers near home.
+    if (atHome && world.settlement.roles.guard > 0) guardDefense(world, content, ctx, dt, out);
   }
 
   // Enemy AI.
@@ -667,19 +711,28 @@ export function tick(world: World, content: Content, ctx: { now: number; rng: ()
   if (world.enemies.length > 140) world.enemies = world.enemies.filter((e) => e.state !== "dead");
 }
 
-function deliverTribute(world: World, content: Content, out: GameEvent[]): void {
-  const pop = world.settlement.population;
+function deliverTribute(world: World, content: Content, rng: () => number, out: GameEvent[]): void {
+  const s = world.settlement;
+  const pop = s.population;
   if (pop <= 0) return;
-  let food = 0, wood = 0, herb = 0;
-  for (let i = 0; i < pop; i++) {
-    food += 1;
-    if (Math.random() < 0.5) wood += 1;
-    if (Math.random() < 0.4) herb += 1;
-  }
-  if (food) addItem(world.player, content, "bread", food);
-  if (wood) addItem(world.player, content, "wood", wood);
-  if (herb) addItem(world.player, content, "herb", herb);
-  out.push({ t: "log", msg: `Your ${pop} ${pop === 1 ? "settler brings" : "settlers bring"} supplies (+${food + wood + herb}).` });
+  const idle = idleSettlers(world);
+  let wood = 0, stone = 0, ore = 0, food = 0, herb = 0;
+  // Gatherers work timber, stone and ore.
+  for (let i = 0; i < s.roles.gatherer; i++) { wood += 1; if (rng() < 0.6) stone += 1; if (rng() < 0.4) ore += 1; }
+  // Foragers bring food and physic.
+  for (let i = 0; i < s.roles.forager; i++) { food += 1; if (rng() < 0.6) herb += 1; }
+  // Idle hands still scrape a little together; guards hold the wall, no tribute.
+  for (let i = 0; i < idle; i++) { if (rng() < 0.5) food += 1; else wood += 1; }
+  // Spill anything that won't fit onto the ground at your feet, so nothing the
+  // log promises is silently destroyed.
+  const add = (id: ItemId, n: number) => {
+    if (n <= 0) return;
+    const left = addItem(world.player, content, id, n);
+    if (left > 0) spawnGround(world, id, left, world.player.pos.x, world.player.pos.y);
+  };
+  add("wood", wood); add("stone", stone); add("iron_ore", ore); add("bread", food); add("herb", herb);
+  const total = wood + stone + ore + food + herb;
+  if (total > 0) out.push({ t: "log", msg: `Your settlers bring supplies (+${total}).` });
 }
 
 function moveEnemyAlong(world: World, e: Enemy, speed: number, dt: number, dx: number, dy: number): void {
@@ -710,6 +763,22 @@ function separate(world: World, e: Enemy): void {
     }
   }
 }
+/** Guards on the wall pick off the dead nearest the settlement centre. */
+function guardDefense(world: World, content: Content, ctx: { rng: () => number }, dt: number, out: GameEvent[]): void {
+  const guards = world.settlement.roles.guard;
+  if (ctx.rng() > guards * 0.2 * dt) return; // ~ one volley every few seconds per guard
+  const h = world.home;
+  const hx = h.x + h.w / 2, hy = h.y + h.h / 2;
+  let best: Enemy | null = null;
+  let bd = 16 * 16;
+  for (const e of world.enemies) {
+    if (e.state === "dead") continue;
+    const d = (e.pos.x - hx) ** 2 + (e.pos.y - hy) ** 2;
+    if (d < bd) { bd = d; best = e; }
+  }
+  if (best) damageEnemy(world, content, ctx, best, 14 + guards * 4, false, out);
+}
+
 function spawnNearPlayer(world: World, content: Content, ctx: { rng: () => number }): void {
   const p = world.player;
   const walk = makeTileWalkable(world);

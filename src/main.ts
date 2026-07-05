@@ -42,6 +42,7 @@ const handlers: HudHandlers = {
   onEquip: (i) => gameHandlers?.onEquip(i),
   onUseSlot: (i) => gameHandlers?.onUseSlot(i),
   onTravel: (id) => gameHandlers?.onTravel(id),
+  onAssign: (role, delta) => gameHandlers?.onAssign(role, delta),
 };
 const hud = new Hud(hudRoot, content, handlers);
 const game = new Game(canvas, world, content, rng, input, hud, fx);
@@ -55,8 +56,9 @@ veil.innerHTML = `
   <div class="tagline">A Plague of the Risen</div>
   <div class="lines" id="veilLines"></div>
   <button class="start" id="startBtn">Take Up the Blade</button>
-  <div style="font-size:12px;color:#5a5f5a;letter-spacing:.08em;max-width:600px;text-align:center;line-height:1.7">
-    <b>Click</b> to move · click a foe to fight · click to search &amp; gather · <b>1–5</b> use items · <b>Tab</b> pack &amp; craft · the <b>town board</b> builds your settlement
+  <div style="font-size:12px;color:#5a5f5a;letter-spacing:.08em;max-width:640px;text-align:center;line-height:1.8">
+    <b>Click</b> to move · click a foe to fight · click to search &amp; gather · <b>1–5</b> use items · <b>Tab</b> pack &amp; craft<br/>
+    the <b>town board</b> builds your settlement &amp; assigns rescued survivors · the <b>waystone</b> sets out on expeditions
   </div>`;
 app.appendChild(veil);
 

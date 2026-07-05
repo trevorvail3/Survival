@@ -123,7 +123,7 @@ export interface Recipe {
 // Enemies — the risen dead and plague-beasts
 // ---------------------------------------------------------------------------
 
-export type EnemyKind = "risen" | "hound" | "wretch" | "revenant";
+export type EnemyKind = "risen" | "hound" | "wretch" | "revenant" | "graveking";
 
 export interface EnemyDef {
   kind: EnemyKind;
@@ -153,6 +153,8 @@ export interface Enemy {
   nextThink: number;
   staggerUntil: number;
   seed: number;
+  /** A named region boss — bigger, richer drops, shows a health bar. */
+  boss?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -237,10 +239,15 @@ export interface StructureDef {
   effect: (level: number) => string;
 }
 
+/** What a rescued settler is put to. Unassigned settlers still give a little. */
+export type SettlerRole = "gatherer" | "forager" | "guard";
+export const SETTLER_ROLES: SettlerRole[] = ["gatherer", "forager", "guard"];
+
 export interface Settlement {
   structures: Record<StructureId, number>; // current level, 0 = not built
   population: number;
-  /** Members rescued but tribute not yet collected are tracked via population. */
+  /** How many settlers are assigned to each role (rest are idle). */
+  roles: Record<SettlerRole, number>;
 }
 
 // ---------------------------------------------------------------------------
@@ -289,6 +296,8 @@ export interface World {
   entry: Vec2;
   /** The home zone kept so its layout + looted state persist across trips. */
   homeCache: ZoneSnapshot | null;
+  /** Named bosses already slain this run — they do not return. */
+  bossesSlain: string[];
   timeOfDay: number;
   day: number;
   clock: number;

@@ -18,7 +18,7 @@ export type Sfx =
   | "drink" | "search" | "equip" | "click" | "hurt" | "death"
   | "nightfall" | "daybreak" | "lowhp";
 
-export type CreatureVoice = "risen" | "hound" | "wretch" | "revenant";
+export type CreatureVoice = "risen" | "hound" | "wretch" | "revenant" | "graveking";
 export type SceneKey = "menu" | "day" | "night";
 
 const VOL_KEY = "ashfall-vol";
@@ -356,6 +356,11 @@ class AudioManager {
           if (kind === "aggro") { growl(64, 46, 1.4, 0.4); this.tone({ f0: 44, dur: 1.4, peak: 0.3, type: "sine", wet: true }); }
           else if (kind === "attack") { this.noise({ dur: 0.14, peak: 0.4, hp: 2000, lp: 8000 }); growl(90, 40, 0.5, 0.36); }
           else { this.tone({ f0: 58, f1: 22, dur: 2.2, peak: 0.4, type: "sawtooth", lp: 360, wet: true }); this.tone({ f0: 620, f1: 200, dur: 0.5, peak: 0.14, type: "triangle", wet: true, delay: 0.1 }); }
+          break;
+        case "graveking": // the boss — a vast tolling dread
+          if (kind === "aggro") { this.tone({ f0: 41, dur: 2.2, peak: 0.5, type: "sawtooth", lp: 300, wet: true }); this.tone({ f0: 61.74, dur: 2.2, peak: 0.34, type: "sawtooth", lp: 340, wet: true }); this.tone({ f0: 33, dur: 2.4, peak: 0.4, type: "sine", wet: true, delay: 0.05 }); }
+          else if (kind === "attack") { this.noise({ dur: 0.3, peak: 0.6, lp: 900 }); this.tone({ f0: 70, f1: 30, dur: 0.5, peak: 0.5, type: "sawtooth", lp: 500, wet: true }); }
+          else { this.tone({ f0: 48, f1: 18, dur: 3, peak: 0.5, type: "sawtooth", lp: 320, wet: true }); this.tone({ f0: 220, f1: 60, dur: 1.6, peak: 0.2, type: "triangle", wet: true, delay: 0.2 }); }
           break;
       }
     } catch { /* ignore */ }

@@ -8,10 +8,11 @@
  * are procedural (glyphs + item icons).
  */
 
-import type { Content, ItemId, StructureId, World } from "../core/types.ts";
+import type { Content, ItemId, SettlerRole, StructureId, World } from "../core/types.ts";
+import { SETTLER_ROLES } from "../core/types.ts";
 import { glyph } from "./glyph.ts";
 import { itemIconSVG } from "./itemIcon.ts";
-import { canBuild, canCraft, INV_COLS, isNight } from "../core/world.ts";
+import { canBuild, canCraft, idleSettlers, INV_COLS, isNight } from "../core/world.ts";
 import { settlementCapacity } from "../content/settlement.ts";
 import { audio } from "./audio.ts";
 
@@ -21,7 +22,14 @@ export interface HudHandlers {
   onEquip: (itemId: ItemId) => void;
   onUseSlot: (slotIndex: number) => void;
   onTravel: (regionId: string) => void;
+  onAssign: (role: SettlerRole, delta: number) => void;
 }
+
+const ROLE_INFO: Record<SettlerRole, { name: string; glyph: string; effect: string }> = {
+  gatherer: { name: "Gatherer", glyph: "anvil", effect: "Timber, stone & ore each dawn" },
+  forager: { name: "Forager", glyph: "meat", effect: "Food & physic each dawn" },
+  guard: { name: "Guard", glyph: "shield", effect: "Holds the wall — thins night raids" },
+};
 
 export const HOTBAR: ItemId[] = ["poultice", "bread", "waterskin", "firebomb", "antidote"];
 
@@ -31,10 +39,12 @@ export class Hud {
   private vitals: HTMLElement;
   private clock: HTMLElement;
   private hotbar: HTMLElement;
+  private promptEl: HTMLElement;
   private logEl: HTMLElement;
   private pack: HTMLElement;
   private settle: HTMLElement;
   private travel: HTMLElement;
+  private bossBar: HTMLElement;
   private banner: HTMLElement;
   private audioBtn: HTMLButtonElement;
   private mode: "none" | "pack" | "settle" | "travel" = "none";
@@ -47,9 +57,12 @@ export class Hud {
     this.clock = this.panel({ right: "12px", top: "12px", textAlign: "right", minWidth: "160px" });
     this.logEl = this.panel({ left: "12px", bottom: "12px", maxWidth: "340px", fontSize: "12px", color: "var(--ink-dim)" });
     this.hotbar = this.floating({ left: "50%", bottom: "12px", transform: "translateX(-50%)", display: "flex", gap: "6px" });
+    this.promptEl = this.floating({ left: "50%", bottom: "76px", transform: "translateX(-50%)", pointerEvents: "none", fontFamily: "'Cinzel',serif", fontSize: "13px", letterSpacing: "0.08em", color: "var(--amber)", textShadow: "0 1px 6px #000", whiteSpace: "nowrap" });
     this.pack = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(560px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none" });
     this.settle = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(520px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none" });
     this.travel = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(520px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none" });
+
+    this.bossBar = this.floating({ left: "50%", top: "64px", transform: "translateX(-50%)", width: "min(440px,72vw)", display: "none", textAlign: "center" });
 
     this.banner = document.createElement("div");
     this.banner.className = "hud-banner";
@@ -116,8 +129,9 @@ export class Hud {
     </div>`;
   }
 
-  update(world: World, _prompt: string | null, near: NearStations): void {
+  update(world: World, prompt: string | null, near: NearStations): void {
     this.near = near;
+    this.promptEl.textContent = this.isModalOpen ? "" : (prompt ?? "");
     const p = world.player;
     this.vitals.innerHTML =
       `<div class="hud-heading">Vitals</div>` +
@@ -154,6 +168,18 @@ export class Hud {
     }).join("");
 
     this.logEl.innerHTML = `<div class="hud-heading">Log</div>` + (this.log.length ? this.log.map((m) => `<div>${m}</div>`).join("") : `<div style="opacity:.5">…</div>`);
+
+    // Boss health bar.
+    const boss = world.enemies.find((e) => e.boss && e.state !== "dead");
+    if (boss && (boss.hp < boss.maxHp || boss.state === "hunt" || boss.state === "attack" || boss.state === "stagger")) {
+      const pct = Math.max(0, (boss.hp / boss.maxHp) * 100);
+      this.bossBar.style.display = "block";
+      this.bossBar.innerHTML =
+        `<div style="font-family:'Cinzel',serif;letter-spacing:.16em;color:var(--blood-bright);font-size:14px;text-transform:uppercase;text-shadow:0 1px 8px #000">${this.content.enemies[boss.kind].name}</div>` +
+        `<div style="height:12px;background:#0c0d0e;border:1px solid #3a1512;border-radius:2px;overflow:hidden;margin-top:3px"><div style="width:${pct}%;height:100%;background:linear-gradient(90deg,#8e2b23,#c23b2c);transition:width .15s linear"></div></div>`;
+    } else {
+      this.bossBar.style.display = "none";
+    }
 
     if (this.mode === "pack") this.renderPack(world);
     else if (this.mode === "settle") this.renderSettlement(world);
@@ -265,14 +291,34 @@ export class Hud {
       </div>`;
     }).join("");
 
+    const idle = idleSettlers(world);
+    const roleRows = SETTLER_ROLES.map((role) => {
+      const info = ROLE_INFO[role];
+      const n = world.settlement.roles[role];
+      return `<div class="srow">
+        <span style="width:20px;height:20px;color:var(--steel);display:inline-block">${glyph(info.glyph)}</span>
+        <div style="flex:1"><div style="color:var(--ink)">${info.name}</div><div style="font-size:11px;color:var(--toxic)">${info.effect}</div></div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button class="act rbtn" data-role="${role}" data-delta="-1" style="width:26px;padding:6px 0" ${n > 0 ? "" : "disabled"}>−</button>
+          <span style="min-width:16px;text-align:center;color:var(--ink)">${n}</span>
+          <button class="act rbtn" data-role="${role}" data-delta="1" style="width:26px;padding:6px 0" ${idle > 0 ? "" : "disabled"}>+</button>
+        </div>
+      </div>`;
+    }).join("");
+
     this.settle.innerHTML =
       `<style>.srow{display:flex;align-items:center;gap:12px;padding:9px 4px;border-bottom:1px solid #1c1e20}</style>
-      <div class="hud-heading">Settlement — ${world.settlement.population}/${cap} settlers</div>
+      <div class="hud-heading">Structures</div>
       ${rows}
-      <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--ink-dim)">Rescue survivors in the wilds to grow your people. [Esc] close</div>`;
+      <div class="hud-heading" style="margin-top:12px">Your People — ${idle} idle of ${world.settlement.population}/${cap}</div>
+      ${world.settlement.population > 0 ? roleRows : `<div style="font-size:12px;color:var(--ink-dim);padding:6px 4px">Rescue survivors in the wilds, then assign them here.</div>`}
+      <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--ink-dim)">[Esc] close</div>`;
 
     this.settle.querySelectorAll<HTMLElement>("button[data-build]").forEach((el) => {
       if (!el.hasAttribute("disabled")) el.onclick = () => this.handlers.onBuild(el.dataset["build"] as StructureId);
+    });
+    this.settle.querySelectorAll<HTMLElement>("button.rbtn").forEach((el) => {
+      if (!el.hasAttribute("disabled")) el.onclick = () => this.handlers.onAssign(el.dataset["role"] as SettlerRole, Number(el.dataset["delta"]));
     });
   }
 }

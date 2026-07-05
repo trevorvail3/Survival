@@ -24,7 +24,7 @@ export interface Layout {
   props: Prop[];
   playerStart: Vec2;
   home: { x: number; y: number; w: number; h: number };
-  enemySpawns?: { kind: EnemyKind; x: number; y: number }[];
+  enemySpawns?: { kind: EnemyKind; x: number; y: number; boss?: boolean }[];
 }
 
 interface Grid {
@@ -168,7 +168,7 @@ export function generateRegion(rng: () => number, def: RegionDef): Layout {
     const here = Math.min(chestsLeft, randInt(rng, 1, 2));
     for (let c = 0; c < here; c++) {
       const px = randInt(rng, bx + 1, bx + rw - 1), py = randInt(rng, by + 1, by + rh - 1);
-      if (g.get(px, py) === "stonefloor" || g.get(px, py) === "rubble") { const k = searchables[randInt(rng, 0, 2)]!; addProp(k, px, py, k); chestsLeft--; }
+      if (g.get(px, py) === "stonefloor" || g.get(px, py) === "rubble") { const k = searchables[randInt(rng, 0, 2)]!; addProp(k, px, py, k === "chest" ? `${def.id}_chest` : k); chestsLeft--; }
     }
     if (survLeft > 0) { const sx = bx + Math.floor(rw / 2), sy = by + Math.floor(rh / 2); if (walkableGround(g, sx, sy) || g.get(sx, sy) === "stonefloor") { addProp("survivor", sx, sy); survLeft--; } }
     if (rng() < 0.6) addProp("cart", bx - 1, by + rh + 1, "cart");
@@ -181,7 +181,7 @@ export function generateRegion(rng: () => number, def: RegionDef): Layout {
       if (walkableGround(g, x, y) && !nearEntry(x, y)) { addProp(kind, x, y, loot); placed++; }
     }
   };
-  if (chestsLeft > 0) scatterProp("chest", chestsLeft, "chest");
+  if (chestsLeft > 0) scatterProp("chest", chestsLeft, `${def.id}_chest`);
   if (survLeft > 0) scatterProp("survivor", survLeft);
 
   // Resource nodes, biased by region.
@@ -191,7 +191,7 @@ export function generateRegion(rng: () => number, def: RegionDef): Layout {
   scatterProp("remains", 5, "remains");
 
   // Enemy spawns, away from the entrance.
-  const enemySpawns: { kind: EnemyKind; x: number; y: number }[] = [];
+  const enemySpawns: { kind: EnemyKind; x: number; y: number; boss?: boolean }[] = [];
   let placed = 0, tries = 0;
   while (placed < def.enemyCount && tries++ < def.enemyCount * 40) {
     const x = randInt(rng, 3, g.w - 4), y = randInt(rng, 3, g.h - 6);
@@ -200,6 +200,23 @@ export function generateRegion(rng: () => number, def: RegionDef): Layout {
     const kind = def.enemyMix[randInt(rng, 0, def.enemyMix.length - 1)]!;
     enemySpawns.push({ kind, x, y });
     placed++;
+  }
+
+  // A region boss: the Barrow King, deep in the barrows, away from the entrance.
+  // Grave/rubble tiles ARE walkable, so accept any standable ground; on the
+  // rare bad roll, scan outward from a known-open spot so he's never walled in.
+  if (def.id === "barrows") {
+    const standable = (x: number, y: number): boolean => { const t = g.get(x, y); return t !== "water" && t !== "forest" && t !== "wall"; };
+    let bx = ex, by = ey - 16, tries2 = 0;
+    do { bx = randInt(rng, 6, g.w - 7); by = randInt(rng, 4, Math.floor(g.h / 2)); tries2++; } while (!standable(bx, by) && tries2 < 120);
+    if (!standable(bx, by)) {
+      search: for (let dy = 10; dy < g.h - 6; dy++) {
+        for (let dx = -5; dx <= 5; dx++) {
+          if (standable(ex + dx, ey - dy)) { bx = ex + dx; by = ey - dy; break search; }
+        }
+      }
+    }
+    enemySpawns.push({ kind: "graveking", x: bx, y: by, boss: true });
   }
 
   return { map: { w: g.w, h: g.h, tiles: g.tiles, indoor: g.indoor }, props, playerStart: entry, home: { x: -10, y: -10, w: 0, h: 0 }, enemySpawns };
