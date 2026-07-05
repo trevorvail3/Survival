@@ -12,8 +12,8 @@ import type { Content, ItemId, SettlerRole, StructureId, World } from "../core/t
 import { SETTLER_ROLES } from "../core/types.ts";
 import { glyph } from "./glyph.ts";
 import { itemIconSVG } from "./itemIcon.ts";
-import { canBuild, canCraft, idleSettlers, INV_COLS, isNight } from "../core/world.ts";
-import { settlementCapacity } from "../content/settlement.ts";
+import { canBuild, canCraft, canSpendSkill, capacity, idleSettlers, INV_COLS, isNight } from "../core/world.ts";
+import { SKILLS, TREE_NAMES, pointsInTree, xpForNext, type SkillTree } from "../content/skills.ts";
 import { audio } from "./audio.ts";
 
 export interface HudHandlers {
@@ -24,6 +24,7 @@ export interface HudHandlers {
   onTravel: (regionId: string) => void;
   onAssign: (role: SettlerRole, delta: number) => void;
   onSkipTutorial: () => void;
+  onSpendSkill: (nodeId: string) => void;
 }
 
 const ROLE_INFO: Record<SettlerRole, { name: string; glyph: string; effect: string }> = {
@@ -45,12 +46,13 @@ export class Hud {
   private pack: HTMLElement;
   private settle: HTMLElement;
   private travel: HTMLElement;
+  private skillsP: HTMLElement;
   private bossBar: HTMLElement;
   private tracker: HTMLElement;
   private tipEl: HTMLElement;
   private banner: HTMLElement;
   private audioBtn: HTMLButtonElement;
-  private mode: "none" | "pack" | "settle" | "travel" = "none";
+  private mode: "none" | "pack" | "settle" | "travel" | "skills" = "none";
   private near: NearStations = { forge: false, workshop: false };
   private log: string[] = [];
   private tipTimer = 0;
@@ -66,6 +68,7 @@ export class Hud {
     this.pack = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(560px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none" });
     this.settle = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(520px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none" });
     this.travel = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(520px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none" });
+    this.skillsP = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(680px,94vw)", maxHeight: "88vh", overflow: "auto", display: "none" });
 
     this.bossBar = this.floating({ left: "50%", top: "64px", transform: "translateX(-50%)", width: "min(440px,72vw)", display: "none", textAlign: "center" });
     this.tracker = this.panel({ left: "12px", top: "172px", maxWidth: "230px", display: "none" });
@@ -110,12 +113,13 @@ export class Hud {
     this.tipTimer = window.setTimeout(() => { this.tipEl.style.opacity = "0"; }, 4600);
   }
 
-  /** Show/refresh the current onboarding objective (null hides the tracker). */
+  /** Show/refresh the current onboarding objective (null hides the tracker).
+   *  Hidden while a modal panel is open so it doesn't overlap. */
   setTask(task: string | null): void {
+    this.tracker.style.display = task && !this.isModalOpen ? "block" : "none";
     if (task === this.lastTask) return;
     this.lastTask = task;
-    if (!task) { this.tracker.style.display = "none"; return; }
-    this.tracker.style.display = "block";
+    if (!task) return;
     this.tracker.innerHTML =
       `<div class="hud-heading" style="color:var(--amber)">Objective</div>` +
       `<div style="font-size:13px;color:var(--ink);line-height:1.45">${task}</div>` +
@@ -129,8 +133,10 @@ export class Hud {
     this.pack.style.display = this.mode === "pack" ? "block" : "none";
     this.settle.style.display = this.mode === "settle" ? "block" : "none";
     this.travel.style.display = this.mode === "travel" ? "block" : "none";
+    this.skillsP.style.display = this.mode === "skills" ? "block" : "none";
   }
   togglePack(): void { this.mode = this.mode === "pack" ? "none" : "pack"; this.show(); }
+  toggleSkills(): void { this.mode = this.mode === "skills" ? "none" : "skills"; this.show(); }
   openPack(): void { this.mode = "pack"; this.show(); }
   openSettlement(): void { this.mode = "settle"; this.show(); }
   openTravel(): void { this.mode = "travel"; this.show(); }
@@ -162,17 +168,23 @@ export class Hud {
     this.near = near;
     this.promptEl.textContent = this.isModalOpen ? "" : (prompt ?? "");
     const p = world.player;
+    const xpPct = Math.min(100, (p.xp / xpForNext(p.level)) * 100);
     this.vitals.innerHTML =
       `<div class="hud-heading">Vitals</div>` +
       this.bar("heart", p.hp, p.maxHp, "#c23b2c") +
       this.bar("meat", p.hunger, 100, "#9a6a3c") +
       this.bar("drop", p.thirst, 100, "#3f6d8c") +
-      (p.infection > 0 ? this.bar("biohazard", p.infection, 100, "#7f9a3c") : "");
+      (p.infection > 0 ? this.bar("biohazard", p.infection, 100, "#7f9a3c") : "") +
+      `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;border-top:1px solid #1c1e20;padding-top:6px">
+        <span style="font-family:'Cinzel',serif;font-size:12px;color:var(--amber);white-space:nowrap">Lv ${p.level}</span>
+        <div style="flex:1;height:6px;background:#0c0d0e;border:1px solid #26282a;border-radius:2px;overflow:hidden"><div style="width:${xpPct}%;height:100%;background:#6a5aa0"></div></div>
+        ${p.points > 0 ? `<span style="font-size:11px;color:var(--amber);white-space:nowrap">+${p.points} pt${p.points > 1 ? "s" : ""}</span>` : ""}
+      </div>`;
 
     const night = isNight(world.timeOfDay);
     const alive = world.enemies.filter((e) => e.state !== "dead").length;
     const phase = Math.floor(world.timeOfDay * 24);
-    const cap = settlementCapacity(world.settlement.structures.quarters);
+    const cap = capacity(world);
     const zoneName = world.zoneId === "home" ? "Your Settlement" : (this.content.regions.find((r) => r.id === world.zoneId)?.name ?? "The Wilds");
     this.clock.innerHTML =
       `<div style="font-family:'Cinzel',serif;font-size:11px;letter-spacing:.1em;color:var(--amber);text-align:right;margin-bottom:2px">${zoneName}</div>` +
@@ -213,6 +225,43 @@ export class Hud {
     if (this.mode === "pack") this.renderPack(world);
     else if (this.mode === "settle") this.renderSettlement(world);
     else if (this.mode === "travel") this.renderTravel(world);
+    else if (this.mode === "skills") this.renderSkills(world);
+  }
+
+  private renderSkills(world: World): void {
+    const p = world.player;
+    const treeCol = (tree: SkillTree): string => {
+      const spent = pointsInTree(p.skills, tree);
+      const nodes = SKILLS.filter((n) => n.tree === tree).map((n) => {
+        const rank = p.skills[n.id] ?? 0;
+        const maxed = rank >= n.maxRank;
+        const locked = spent < n.reqTree;
+        const can = canSpendSkill(world, n.id);
+        const pips = Array.from({ length: n.maxRank }, (_, i) => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:3px;background:${i < rank ? "var(--amber)" : "#2a2c2e"}"></span>`).join("");
+        return `<div class="snode" style="opacity:${locked ? 0.5 : 1}">
+          <div style="flex:1">
+            <div style="color:var(--ink);font-size:13px">${n.name} <span style="font-size:11px;color:var(--ink-dim)">${rank}/${n.maxRank}</span></div>
+            <div style="font-size:11px;color:var(--toxic)">${n.effect(Math.max(1, rank))}</div>
+            ${locked ? `<div style="font-size:10px;color:var(--rust)">needs ${n.reqTree} pts in ${TREE_NAMES[tree]}</div>` : ""}
+            <div style="margin-top:3px">${pips}</div>
+          </div>
+          ${maxed ? `<span style="color:var(--amber);font-size:11px">MAX</span>` : `<button class="act sbtn" data-skill="${n.id}" ${can ? "" : "disabled"} style="width:28px;padding:6px 0;opacity:${can ? 1 : 0.35}">+</button>`}
+        </div>`;
+      }).join("");
+      return `<div style="flex:1;min-width:180px"><div class="hud-heading" style="color:var(--amber)">${TREE_NAMES[tree]} <span style="color:var(--ink-dim);font-size:10px">${spent} pt</span></div>${nodes}</div>`;
+    };
+
+    this.skillsP.innerHTML =
+      `<style>.snode{display:flex;align-items:center;gap:8px;padding:7px 4px;border-bottom:1px solid #1c1e20}</style>
+      <div class="hud-heading">Character — Level ${p.level} · <span style="color:var(--amber)">${p.points} skill point${p.points === 1 ? "" : "s"}</span></div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+        ${treeCol("warfare")}${treeCol("endurance")}${treeCol("dominion")}
+      </div>
+      <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--ink-dim)">Earn points by fighting, gathering, crafting and rescuing. [C] or [Esc] close</div>`;
+
+    this.skillsP.querySelectorAll<HTMLElement>("button.sbtn").forEach((el) => {
+      if (!el.hasAttribute("disabled")) el.onclick = () => this.handlers.onSpendSkill(el.dataset["skill"]!);
+    });
   }
 
   private renderTravel(world: World): void {
@@ -299,7 +348,7 @@ export class Hud {
   }
 
   private renderSettlement(world: World): void {
-    const cap = settlementCapacity(world.settlement.structures.quarters);
+    const cap = capacity(world);
     const rows = (Object.keys(this.content.structures) as StructureId[]).map((id) => {
       const def = this.content.structures[id];
       const level = world.settlement.structures[id];

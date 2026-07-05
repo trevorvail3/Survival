@@ -16,7 +16,7 @@ export type Sfx =
   | "melee" | "hit" | "crit" | "bowshot" | "dryfire" | "throw" | "explode"
   | "pickup" | "craft" | "build" | "recruit" | "gather" | "heal" | "eat"
   | "drink" | "search" | "equip" | "click" | "hurt" | "death"
-  | "nightfall" | "daybreak" | "lowhp";
+  | "nightfall" | "daybreak" | "lowhp" | "levelup";
 
 export type CreatureVoice = "risen" | "hound" | "wretch" | "revenant" | "graveking" | "prior";
 export type SceneKey = "menu" | "day" | "night";
@@ -261,6 +261,12 @@ class AudioManager {
         case "recruit":
           this.note({ f: 262, dur: 0.5, peak: 0.14, type: "triangle", attack: 0.02, wet: true });
           this.note({ f: 392, dur: 0.6, peak: 0.13, type: "triangle", attack: 0.03, wet: true, delay: 0.12 });
+          break;
+        case "levelup": // a rising three-note fanfare
+          this.note({ f: 261.63, dur: 0.5, peak: 0.16, type: "triangle", attack: 0.01, wet: true });
+          this.note({ f: 329.63, dur: 0.5, peak: 0.16, type: "triangle", attack: 0.01, wet: true, delay: 0.12 });
+          this.note({ f: 392, dur: 0.7, peak: 0.18, type: "triangle", attack: 0.01, wet: true, delay: 0.24 });
+          this.note({ f: 523.25, dur: 0.8, peak: 0.16, type: "sine", attack: 0.02, wet: true, delay: 0.24 });
           break;
         case "gather":
           this.noise({ dur: 0.18, peak: 0.2, hp: 300, lp: 2400 });

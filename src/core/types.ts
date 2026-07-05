@@ -220,6 +220,13 @@ export interface Player {
   nextAttack: number;
   infection: number;
   alive: boolean;
+  // --- RPG progression ---
+  level: number;
+  xp: number;
+  /** Unspent skill points. */
+  points: number;
+  /** Ranks purchased per skill-node id. */
+  skills: Record<string, number>;
 }
 
 // ---------------------------------------------------------------------------

@@ -39,6 +39,7 @@ const handlers: HudHandlers = {
   onTravel: (id) => gameHandlers?.onTravel(id),
   onAssign: (role, delta) => gameHandlers?.onAssign(role, delta),
   onSkipTutorial: () => gameHandlers?.onSkipTutorial(),
+  onSpendSkill: (id) => gameHandlers?.onSpendSkill(id),
 };
 const hud = new Hud(hudRoot, content, handlers);
 
@@ -69,7 +70,7 @@ veil.innerHTML = `
     <button class="start" id="startBtn" ${saved ? `style="background:#2a2622;color:#c3c6c4"` : ""}>${saved ? "New Game" : "Take Up the Blade"}</button>
   </div>
   <div style="font-size:12px;color:#5a5f5a;letter-spacing:.08em;max-width:640px;text-align:center;line-height:1.8">
-    <b>Click</b> to move · click a foe to fight · click to search &amp; gather · <b>1–5</b> use items · <b>Tab</b> pack &amp; craft<br/>
+    <b>Click</b> to move · click a foe to fight · click to search &amp; gather · <b>1–5</b> use items · <b>Tab</b> pack &amp; craft · <b>C</b> skills<br/>
     the <b>town board</b> builds your settlement &amp; assigns rescued survivors · the <b>waystone</b> sets out on expeditions
   </div>`;
 app.appendChild(veil);

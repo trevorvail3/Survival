@@ -18,6 +18,13 @@ the town board, set out, and rescue your first survivor, with contextual tips
 the first time you're wounded, night falls, or the plague takes hold. It's
 skippable, and its progress is saved with your run.
 
+You **level up** as you play — kills, gathering, crafting and rescues all grant
+XP — and spend the skill points you earn across three trees that fit the world:
+**Warfare** (damage, crit, armour-sunder, a cleave capstone, vigour), **Endurance**
+(slower hunger/thirst, plague-ward, forager yields, fleet-foot, dark-sight), and
+**Dominion** (cheaper builds, richer tribute, healing, hardened guards, more
+settlers). Open the character sheet with **C**.
+
 ## How it plays
 
 - **Point-and-click, like `world`/old-school RuneScape.** Click the ground to
@@ -54,8 +61,8 @@ skippable, and its progress is saved with your run.
   hearth to reach dawn.
 
 **Controls:** click to move / fight / use · **1–5** use hotbar items (4 hurls a
-firepot at the cursor) · **Tab** pack & crafting · click the **town board** to
-build · **Esc** closes panels.
+firepot at the cursor) · **Tab** pack & crafting · **C** character & skills ·
+click the **town board** to build · **Esc** closes panels.
 
 Your run **autosaves** to the browser; close the tab and pick **Continue** to
 resume exactly where you left off — the zone you're in, your settlement, your

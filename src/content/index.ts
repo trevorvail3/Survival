@@ -24,3 +24,4 @@ export { generateHome, generateRegion, HOME_W, HOME_H, REGION_W, REGION_H } from
 export { rollLoot } from "./loot.ts";
 export { settlementCapacity } from "./settlement.ts";
 export { regionById } from "./regions.ts";
+export { SKILLS, TREE_NAMES, computeMods, xpForNext, pointsInTree } from "./skills.ts";

@@ -17,7 +17,9 @@ import {
   orderAttack,
   orderInteract,
   orderMove,
+  playerMods,
   restAtHearth,
+  spendSkill,
   throwFirepot,
   tick,
   travelTo,
@@ -91,6 +93,7 @@ export class Game {
 
     // --- Input: clicks + hotkeys ---
     if (this.input.pressed("tab")) { this.hud.togglePack(); audio.play("click"); this.tut("pack"); }
+    if (this.input.pressed("c")) { this.hud.toggleSkills(); audio.play("click"); }
     if (this.input.pressed("escape")) this.hud.closeAll();
 
     const click = this.input.consumeClick();
@@ -143,7 +146,7 @@ export class Game {
     this.g.setTransform(this.zoom, 0, 0, this.zoom, -sc.x * this.zoom, -sc.y * this.zoom);
     this.fx.draw(this.g);
     this.g.setTransform(1, 0, 0, 1, 0, 0);
-    drawLighting(this.g, world, sc, this.viewW, this.viewH, this.zoom, this.fx.activeLights());
+    drawLighting(this.g, world, sc, this.viewW, this.viewH, this.zoom, this.fx.activeLights(), playerMods(p).lightBonus);
 
     this.hud.update(world, this.hoverPrompt(), { forge: this.near("forge"), workshop: this.near("workbench") });
     this.input.endFrame();
@@ -248,6 +251,7 @@ export class Game {
       onEquip: (id: ItemId) => { const ev: GameEvent[] = []; useSlotById(this.world, this.content, id, ev); this.dispatch(ev, performance.now()); },
       onUseSlot: (i: number) => { const ev: GameEvent[] = []; useSlot(this.world, this.content, i, ev); this.dispatch(ev, performance.now()); },
       onSkipTutorial: () => { this.tutorial.skip(); this.hud.setTask(null); },
+      onSpendSkill: (nodeId: string) => { spendSkill(this.world, nodeId); },
       onTravel: (regionId: string) => {
         const ev: GameEvent[] = [];
         if (travelTo(this.world, this.content, this.rng, regionId, ev)) {
@@ -287,6 +291,7 @@ export class Game {
         case "craft": audio.play("craft"); this.hud.pushLog(`Crafted ${this.content.items[e.id]?.name ?? e.id}.`); this.tut("craft"); break;
         case "build": audio.play("build"); this.hud.pushLog(`${this.content.structures[e.id].name} raised to level ${e.level}.`); this.hud.showBanner(this.content.structures[e.id].name, `Level ${e.level}`, 1500); break;
         case "recruit": audio.play("recruit"); this.tut("rescue"); break;
+        case "levelUp": audio.play("levelup"); this.hud.showBanner(`Level ${e.level}`, "A skill point earned — press C.", 2000); this.hud.pushLog(`You reach level ${e.level}.`); break;
         case "heal": audio.play("heal"); break;
         case "eat": audio.play("eat"); break;
         case "drink": audio.play("drink"); break;

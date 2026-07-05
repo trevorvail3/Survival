@@ -421,6 +421,7 @@ export function drawLighting(
   g: CanvasRenderingContext2D, world: World, cam: Camera,
   viewW: number, viewH: number, zoom: number,
   extraLights: { x: number; y: number; r: number; color: string }[],
+  lightBonus = 0,
 ): void {
   const dl = daylight(world.timeOfDay);
   const night = isNight(world.timeOfDay);
@@ -429,7 +430,7 @@ export function drawLighting(
 
   const p = world.player;
   const lights: { x: number; y: number; r: number; color: string }[] = [
-    { x: p.pos.x, y: p.pos.y, r: night ? 7 : 10, color: "rgba(255,225,170," },
+    { x: p.pos.x, y: p.pos.y, r: (night ? 7 : 10) + lightBonus, color: "rgba(255,225,170," },
   ];
   for (const pr of world.props) {
     if (pr.kind === "hearth" || pr.kind === "forge") lights.push({ x: pr.pos.x + 0.5, y: pr.pos.y + 0.5, r: pr.kind === "hearth" ? 6 : 4, color: "rgba(255,180,90," });

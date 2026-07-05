@@ -30,6 +30,8 @@ import { generateHome, generateRegion } from "../content/map.ts";
 import { regionById } from "../content/regions.ts";
 import { rollLoot } from "../content/loot.ts";
 import { settlementCapacity } from "../content/settlement.ts";
+import { computeMods, pointsInTree, SKILLS, xpForNext } from "../content/skills.ts";
+import type { Mods } from "../content/skills.ts";
 
 export const PLAYER_RADIUS = 0.34;
 export const INV_COLS = 6;
@@ -67,6 +69,7 @@ export type GameEvent =
   | { t: "craft"; id: ItemId }
   | { t: "build"; id: StructureId; level: number }
   | { t: "recruit" }
+  | { t: "levelUp"; level: number }
   | { t: "heal" }
   | { t: "eat" }
   | { t: "drink" }
@@ -154,6 +157,71 @@ export function removeItem(player: Player, id: ItemId, qty: number): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// Progression (XP, levels, skill trees)
+// ---------------------------------------------------------------------------
+
+const BASE_HP = 100;
+const HP_PER_LEVEL = 5;
+
+export function playerMods(player: Player): Mods {
+  return computeMods(player.skills);
+}
+
+function recomputeMaxHp(player: Player): void {
+  const old = player.maxHp;
+  player.maxHp = BASE_HP + (player.level - 1) * HP_PER_LEVEL + playerMods(player).maxHpBonus;
+  if (player.maxHp > old) player.hp += player.maxHp - old; // gains apply to current HP too
+  if (player.hp > player.maxHp) player.hp = player.maxHp;
+}
+
+export function grantXp(world: World, amount: number, out: GameEvent[]): void {
+  const p = world.player;
+  if (!p.alive) return;
+  p.xp += amount;
+  while (p.xp >= xpForNext(p.level)) {
+    p.xp -= xpForNext(p.level);
+    p.level++;
+    p.points++;
+    recomputeMaxHp(p);
+    p.hp = p.maxHp; // a level-up mends you fully
+    out.push({ t: "levelUp", level: p.level });
+  }
+}
+
+export function canSpendSkill(world: World, nodeId: string): boolean {
+  const p = world.player;
+  if (p.points <= 0) return false;
+  const node = SKILLS.find((n) => n.id === nodeId);
+  if (!node) return false;
+  if ((p.skills[nodeId] ?? 0) >= node.maxRank) return false;
+  return pointsInTree(p.skills, node.tree) >= node.reqTree;
+}
+
+export function spendSkill(world: World, nodeId: string): boolean {
+  if (!canSpendSkill(world, nodeId)) return false;
+  const p = world.player;
+  p.skills[nodeId] = (p.skills[nodeId] ?? 0) + 1;
+  p.points--;
+  recomputeMaxHp(p);
+  return true;
+}
+
+/** Settler cap: Quarters level plus any Quartermaster bonus. */
+export function capacity(world: World): number {
+  return settlementCapacity(world.settlement.structures.quarters) + playerMods(world.player).capBonus;
+}
+
+/** A structure's next-level cost, reduced by Master Builder. */
+export function buildCost(world: World, content: Content, id: StructureId): { id: ItemId; qty: number }[] | null {
+  const def = content.structures[id];
+  const level = world.settlement.structures[id];
+  const base = def.costs[level];
+  if (!base) return null;
+  const mult = playerMods(world.player).buildCostMult;
+  return base.map((c) => ({ id: c.id, qty: Math.max(1, Math.round(c.qty * mult)) }));
+}
+
+// ---------------------------------------------------------------------------
 // World creation
 // ---------------------------------------------------------------------------
 
@@ -175,6 +243,10 @@ export function createWorld(content: Content, rng: () => number): World {
     nextAttack: 0,
     infection: 0,
     alive: true,
+    level: 1,
+    xp: 0,
+    points: 0,
+    skills: {},
   };
   addItem(player, content, "rusty_sword", 1);
   addItem(player, content, "poultice", 2);
@@ -330,7 +402,8 @@ function followPath(world: World, dt: number): boolean {
   const p = world.player;
   if (p.path.length === 0) return true;
   const node = p.path[0]!;
-  if (stepToward(world, node.x + 0.5, node.y + 0.5, WALK_SPEED, dt)) p.path.shift();
+  const speed = WALK_SPEED * playerMods(p).moveMult;
+  if (stepToward(world, node.x + 0.5, node.y + 0.5, speed, dt)) p.path.shift();
   return p.path.length === 0;
 }
 
@@ -395,15 +468,26 @@ function attackTarget(world: World, content: Content, ctx: { rng: () => number }
     out.push({ t: "melee", x: p.pos.x, y: p.pos.y });
   }
   const eDef = content.enemies[e.kind];
-  const crit = ctx.rng() < 0.12;
-  let dmg = Math.round(wep.damage * (0.85 + ctx.rng() * 0.3) * (crit ? 1.8 : 1));
-  dmg = Math.max(1, dmg - eDef.armor);
+  const m = playerMods(p);
+  const crit = ctx.rng() < m.critChance;
+  let dmg = Math.round(wep.damage * m.meleeMult * (0.85 + ctx.rng() * 0.3) * (crit ? 1.8 : 1));
+  dmg = Math.max(1, dmg - Math.max(0, eDef.armor - m.armorPen));
   damageEnemy(world, content, ctx, e, dmg, crit, out);
   // Knockback + brief stagger on solid hits.
   const kl = Math.hypot(e.pos.x - p.pos.x, e.pos.y - p.pos.y) || 1;
   e.pos.x += ((e.pos.x - p.pos.x) / kl) * 0.2;
   e.pos.y += ((e.pos.y - p.pos.y) / kl) * 0.2;
   e.staggerUntil = world.clock + 220;
+  // Cleave: the blow carries to every foe within reach around you.
+  if (m.cleave && wep.kind !== "bow") {
+    for (const o of world.enemies) {
+      if (o === e || o.state === "dead") continue;
+      if (Math.hypot(o.pos.x - p.pos.x, o.pos.y - p.pos.y) <= wep.reach + 0.6) {
+        const od = Math.max(1, Math.round(dmg * 0.5) - Math.max(0, content.enemies[o.kind].armor - m.armorPen));
+        damageEnemy(world, content, ctx, o, od, false, out);
+      }
+    }
+  }
 }
 
 function damageEnemy(world: World, content: Content, ctx: { rng: () => number }, e: Enemy, dmg: number, crit: boolean, out: GameEvent[]): void {
@@ -418,6 +502,7 @@ function damageEnemy(world: World, content: Content, ctx: { rng: () => number },
       if (!world.bossesSlain.includes(e.kind)) world.bossesSlain.push(e.kind);
       out.push({ t: "log", msg: `${content.enemies[e.kind].name} falls. Its hoard is yours.` });
     }
+    grantXp(world, content.enemies[e.kind].bounty * 8 + 5, out);
   } else if (e.state === "idle" || e.state === "wander") {
     e.state = "hunt";
     out.push({ t: "aggro", kind: e.kind });
@@ -435,7 +520,8 @@ function attackPlayer(world: World, content: Content, e: Enemy, out: GameEvent[]
   const dmg = Math.max(1, Math.round(eDef.damage * (0.9 + Math.random() * 0.2)) - armorVal);
   p.hp -= dmg;
   out.push({ t: "playerHurt", dmg });
-  p.infection = Math.min(100, p.infection + (e.kind === "revenant" ? 8 : e.kind === "wretch" ? 12 : 6));
+  const infect = (e.kind === "revenant" ? 8 : e.kind === "wretch" ? 12 : e.boss ? 10 : 6) * playerMods(p).infectionMult;
+  p.infection = Math.min(100, p.infection + infect);
   if (p.hp <= 0) { p.hp = 0; p.alive = false; out.push({ t: "death" }); }
 }
 
@@ -465,8 +551,7 @@ function resolveInteract(world: World, content: Content, ctx: { rng: () => numbe
   if (isStation(pr.kind)) return;
   if (pr.kind === "survivor") {
     if (pr.used) return;
-    const cap = settlementCapacity(world.settlement.structures.quarters);
-    if (world.settlement.population >= cap) {
+    if (world.settlement.population >= capacity(world)) {
       out.push({ t: "log", msg: "No room. Build up your Quarters to house more." });
       return;
     }
@@ -474,6 +559,7 @@ function resolveInteract(world: World, content: Content, ctx: { rng: () => numbe
     world.settlement.population++;
     out.push({ t: "recruit" });
     out.push({ t: "log", msg: "A survivor joins your settlement." });
+    grantXp(world, 45, out);
     return;
   }
   // Searchable / gatherable.
@@ -484,12 +570,15 @@ function resolveInteract(world: World, content: Content, ctx: { rng: () => numbe
   else out.push({ t: "search" });
   const drops = rollLoot(ctx.rng, pr.loot ?? pr.kind);
   if (drops.length === 0) { out.push({ t: "log", msg: "Empty." }); return; }
+  const bonus = isNode ? playerMods(world.player).gatherBonus : 0; // Forager
   for (const d of drops) {
-    const left = addItem(world.player, content, d.id, d.qty);
-    const got = d.qty - left;
+    const qty = d.qty + bonus;
+    const left = addItem(world.player, content, d.id, qty);
+    const got = qty - left;
     if (got > 0) out.push({ t: "pickup", id: d.id, qty: got });
     if (left > 0) spawnGround(world, d.id, left, pr.pos.x + 0.5, pr.pos.y + 0.5);
   }
+  grantXp(world, isNode ? 4 : 6, out);
 }
 
 export function restAtHearth(world: World, content: Content, rng: () => number, out: GameEvent[]): void {
@@ -522,13 +611,14 @@ export function useSlot(world: World, content: Content, slotIndex: number, out: 
   if (!slot) return;
   const def = content.items[slot.id];
   if (!def) return;
+  const heal = playerMods(p).healMult; // Field Medic
   switch (def.use) {
-    case "heal": p.hp = Math.min(p.maxHp, p.hp + (def.heal ?? 0)); removeItem(p, slot.id, 1); out.push({ t: "heal" }); break;
+    case "heal": p.hp = Math.min(p.maxHp, p.hp + (def.heal ?? 0) * heal); removeItem(p, slot.id, 1); out.push({ t: "heal" }); break;
     case "food": p.hunger = Math.min(100, p.hunger + (def.food ?? 0)); removeItem(p, slot.id, 1); out.push({ t: "eat" }); break;
     case "drink": p.thirst = Math.min(100, p.thirst + (def.drink ?? 0)); removeItem(p, slot.id, 1); out.push({ t: "drink" }); break;
     case "cure":
       p.infection = Math.max(0, p.infection - (def.cure ?? 0));
-      if (def.heal) p.hp = Math.min(p.maxHp, p.hp + def.heal);
+      if (def.heal) p.hp = Math.min(p.maxHp, p.hp + def.heal * heal);
       removeItem(p, slot.id, 1); out.push({ t: "cure" }); break;
     case "equip":
       if (def.slot === "body") p.armor = def.id;
@@ -574,6 +664,7 @@ export function craft(world: World, content: Content, recipeId: string, out: Gam
   for (const i of r.inputs) removeItem(world.player, i.id, i.qty);
   addItem(world.player, content, r.out, r.outQty);
   out.push({ t: "craft", id: r.out });
+  grantXp(world, 6, out);
   return true;
 }
 
@@ -592,17 +683,15 @@ export function assignRole(world: World, role: SettlerRole, delta: number): void
 
 export function canBuild(world: World, content: Content, id: StructureId): boolean {
   const def = content.structures[id];
-  const level = world.settlement.structures[id];
-  if (level >= def.maxLevel) return false;
-  const cost = def.costs[level];
+  if (world.settlement.structures[id] >= def.maxLevel) return false;
+  const cost = buildCost(world, content, id);
   if (!cost) return false;
   return cost.every((c) => countItem(world.player, c.id) >= c.qty);
 }
 export function build(world: World, content: Content, id: StructureId, out: GameEvent[]): boolean {
   if (!canBuild(world, content, id)) return false;
-  const def = content.structures[id];
   const level = world.settlement.structures[id];
-  const cost = def.costs[level]!;
+  const cost = buildCost(world, content, id)!;
   for (const c of cost) removeItem(world.player, c.id, c.qty);
   world.settlement.structures[id] = level + 1;
   out.push({ t: "build", id, level: level + 1 });
@@ -635,9 +724,10 @@ export function tick(world: World, content: Content, ctx: { now: number; rng: ()
 
   if (!p.alive) return;
 
-  // Survival.
-  p.hunger = Math.max(0, p.hunger - 0.26 * dt);
-  p.thirst = Math.max(0, p.thirst - 0.38 * dt);
+  // Survival (Iron Gut slows the drain).
+  const decay = playerMods(p).decayMult;
+  p.hunger = Math.max(0, p.hunger - 0.26 * decay * dt);
+  p.thirst = Math.max(0, p.thirst - 0.38 * decay * dt);
   let bleed = 0;
   if (p.hunger <= 0) bleed += 2.5;
   if (p.thirst <= 0) bleed += 3.5;
@@ -723,6 +813,10 @@ function deliverTribute(world: World, content: Content, rng: () => number, out: 
   for (let i = 0; i < s.roles.forager; i++) { food += 1; if (rng() < 0.6) herb += 1; }
   // Idle hands still scrape a little together; guards hold the wall, no tribute.
   for (let i = 0; i < idle; i++) { if (rng() < 0.5) food += 1; else wood += 1; }
+  // Bountiful sends your folk home with more.
+  const t = playerMods(world.player).tributeMult;
+  wood = Math.round(wood * t); stone = Math.round(stone * t); ore = Math.round(ore * t);
+  food = Math.round(food * t); herb = Math.round(herb * t);
   // Spill anything that won't fit onto the ground at your feet, so nothing the
   // log promises is silently destroyed.
   const add = (id: ItemId, n: number) => {
@@ -776,7 +870,7 @@ function guardDefense(world: World, content: Content, ctx: { rng: () => number }
     const d = (e.pos.x - hx) ** 2 + (e.pos.y - hy) ** 2;
     if (d < bd) { bd = d; best = e; }
   }
-  if (best) damageEnemy(world, content, ctx, best, 14 + guards * 4, false, out);
+  if (best) damageEnemy(world, content, ctx, best, Math.round((14 + guards * 4) * playerMods(world.player).guardMult), false, out);
 }
 
 function spawnNearPlayer(world: World, content: Content, ctx: { rng: () => number }): void {
