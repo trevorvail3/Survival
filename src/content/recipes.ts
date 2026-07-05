@@ -10,11 +10,11 @@ import type { Recipe } from "../core/types.ts";
 
 export const RECIPES: Recipe[] = [
   // --- Field (anywhere) ---
-  { id: "r_poultice", name: "Poultice", out: "poultice", outQty: 1, inputs: [{ id: "herb", qty: 2 }, { id: "cloth", qty: 1 }] },
-  { id: "r_antidote", name: "Antidote", out: "antidote", outQty: 1, inputs: [{ id: "herb", qty: 3 }, { id: "oil", qty: 1 }] },
-  { id: "r_firebomb", name: "Firepot", out: "firebomb", outQty: 1, inputs: [{ id: "oil", qty: 1 }, { id: "cloth", qty: 1 }] },
-  { id: "r_club", name: "Wooden Club", out: "club", outQty: 1, inputs: [{ id: "wood", qty: 2 }] },
-  { id: "r_rope", name: "Rope", out: "rope", outQty: 1, inputs: [{ id: "cloth", qty: 3 }] },
+  { id: "r_poultice", name: "Poultice", out: "poultice", outQty: 1, skill: "herblore", inputs: [{ id: "herb", qty: 2 }, { id: "cloth", qty: 1 }] },
+  { id: "r_antidote", name: "Antidote", out: "antidote", outQty: 1, skill: "herblore", inputs: [{ id: "herb", qty: 3 }, { id: "oil", qty: 1 }] },
+  { id: "r_firebomb", name: "Firepot", out: "firebomb", outQty: 1, skill: "crafting", inputs: [{ id: "oil", qty: 1 }, { id: "cloth", qty: 1 }] },
+  { id: "r_club", name: "Wooden Club", out: "club", outQty: 1, skill: "crafting", inputs: [{ id: "wood", qty: 2 }] },
+  { id: "r_rope", name: "Rope", out: "rope", outQty: 1, skill: "crafting", inputs: [{ id: "cloth", qty: 3 }] },
 
   // --- Workshop ---
   { id: "r_arrows", name: "Arrows ×8", out: "arrow", outQty: 8, workshop: 1, inputs: [{ id: "wood", qty: 2 }, { id: "bone", qty: 1 }] },

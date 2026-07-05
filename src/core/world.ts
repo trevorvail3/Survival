@@ -20,6 +20,7 @@ import type {
   ItemId,
   Player,
   Prop,
+  Recipe,
   SettlerRole,
   StructureId,
   Vec2,
@@ -34,6 +35,8 @@ import { settlementCapacity, SETTLER_NAMES } from "../content/settlement.ts";
 import { pick } from "./rng.ts";
 import { computeMods, nodeUnlocked, SKILLS, xpForNext } from "../content/skills.ts";
 import type { Mods } from "../content/skills.ts";
+import { levelForXp } from "../content/trainskills.ts";
+import type { SkillId } from "../content/trainskills.ts";
 
 export const PLAYER_RADIUS = 0.34;
 export const INV_COLS = 6;
@@ -74,6 +77,7 @@ export type GameEvent =
   | { t: "build"; id: StructureId; level: number }
   | { t: "recruit" }
   | { t: "levelUp"; level: number }
+  | { t: "skillup"; skill: string; level: number }
   | { t: "victory" }
   | { t: "heal" }
   | { t: "eat" }
@@ -220,6 +224,35 @@ export function grantXp(world: World, amount: number, out: GameEvent[]): void {
   }
 }
 
+/** Current level in a trainable (OSRS-style) skill. */
+export function skillLevel(world: World, id: SkillId): number {
+  return levelForXp(world.player.trained[id] ?? 0);
+}
+
+/** Grant XP-by-doing to a trainable skill; emits `skillup` on each new level. */
+export function grantSkillXp(world: World, id: SkillId, amount: number, out: GameEvent[]): void {
+  const p = world.player;
+  if (!p.alive || amount <= 0) return;
+  const before = levelForXp(p.trained[id] ?? 0);
+  p.trained[id] = (p.trained[id] ?? 0) + Math.round(amount);
+  const after = levelForXp(p.trained[id]!);
+  if (after > before) out.push({ t: "skillup", skill: id, level: after });
+}
+
+/** Award combat XP for a kill, split by the style used (weapon kind). */
+function grantCombatXp(world: World, content: Content, base: number, out: GameEvent[]): void {
+  const wk = world.player.equipped ? content.items[world.player.equipped]?.weapon?.kind : undefined;
+  if (wk === "bow") {
+    grantSkillXp(world, "ranged", base, out);
+    grantSkillXp(world, "hitpoints", base * 0.5, out);
+  } else {
+    grantSkillXp(world, "attack", base * 0.5, out);
+    grantSkillXp(world, "strength", base * 0.5, out);
+    grantSkillXp(world, "defence", base * 0.35, out);
+    grantSkillXp(world, "hitpoints", base * 0.5, out);
+  }
+}
+
 export function canSpendSkill(world: World, nodeId: string): boolean {
   const p = world.player;
   if (p.points <= 0) return false;
@@ -283,6 +316,7 @@ export function createWorld(content: Content, rng: () => number): World {
     xp: 0,
     points: 0,
     skills: {},
+    trained: {},
   };
   addItem(player, content, "rusty_sword", 1);
   addItem(player, content, "poultice", 2);
@@ -577,6 +611,7 @@ function damageEnemy(world: World, content: Content, ctx: { rng: () => number },
       if (e.kind === "rotmother" && !world.won) { world.won = true; out.push({ t: "victory" }); }
     }
     grantXp(world, content.enemies[e.kind].bounty * 8 + 5, out);
+    grantCombatXp(world, content, content.enemies[e.kind].bounty * 6 + 8, out);
   } else if (e.state === "idle" || e.state === "wander") {
     e.state = "hunt";
     out.push({ t: "aggro", kind: e.kind });
@@ -678,6 +713,10 @@ function resolveInteract(world: World, content: Content, ctx: { rng: () => numbe
     if (left > 0) spawnGround(world, d.id, left, pr.pos.x + 0.5, pr.pos.y + 0.5);
   }
   grantXp(world, isNode ? 4 : 6, out);
+  if (isNode) {
+    const skill: SkillId | null = pr.kind === "tree" ? "woodcutting" : pr.kind === "rock" ? "mining" : pr.kind === "herbs" ? "herblore" : null;
+    if (skill) grantSkillXp(world, skill, 16, out);
+  }
 }
 
 export function restAtHearth(world: World, content: Content, rng: () => number, out: GameEvent[]): void {
@@ -755,7 +794,17 @@ export function canCraft(world: World, content: Content, recipeId: string): bool
   const s = world.settlement.structures;
   if (r.forge && s.forge < r.forge) return false;
   if (r.workshop && s.workshop < r.workshop) return false;
+  const sk = recipeSkill(r);
+  if (r.reqLevel && skillLevel(world, sk) < r.reqLevel) return false;
   return r.inputs.every((i) => countItem(world.player, i.id) >= i.qty);
+}
+
+/** Which trainable skill a recipe trains — explicit, else inferred from station. */
+function recipeSkill(r: Recipe): SkillId {
+  if (r.skill) return r.skill as SkillId;
+  if (r.forge) return "smithing";
+  if (r.workshop) return "crafting";
+  return "herblore";
 }
 export function craft(world: World, content: Content, recipeId: string, out: GameEvent[]): boolean {
   const r = content.recipes.find((x) => x.id === recipeId);
@@ -764,6 +813,7 @@ export function craft(world: World, content: Content, recipeId: string, out: Gam
   addItem(world.player, content, r.out, r.outQty);
   out.push({ t: "craft", id: r.out });
   grantXp(world, 6, out);
+  grantSkillXp(world, recipeSkill(r), r.xp ?? 18, out);
   return true;
 }
 
@@ -794,6 +844,7 @@ export function build(world: World, content: Content, id: StructureId, out: Game
   for (const c of cost) removeItem(world.player, c.id, c.qty);
   world.settlement.structures[id] = level + 1;
   out.push({ t: "build", id, level: level + 1 });
+  grantSkillXp(world, "construction", 40 + level * 35, out);
   return true;
 }
 

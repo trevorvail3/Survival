@@ -14,6 +14,7 @@ import { glyph } from "./glyph.ts";
 import { itemIconSVG } from "./itemIcon.ts";
 import { canBuild, canCraft, canSpendSkill, capacity, idleSettlers, INV_COLS, isNight } from "../core/world.ts";
 import { SKILLS, TREE_NAMES, pointsInTree, xpForNext, nodeUnlocked, type SkillTree } from "../content/skills.ts";
+import { SKILL_META, SKILL_GROUPS, SKILL_IDS, MAX_SKILL, levelForXp, levelProgress, type SkillId } from "../content/trainskills.ts";
 import { audio } from "./audio.ts";
 
 export interface HudHandlers {
@@ -312,6 +313,37 @@ export class Hud {
     this.addClose(this.stashP);
   }
 
+  private skillTotal(world: World): number {
+    return SKILL_IDS.reduce((n, id) => n + levelForXp(world.player.trained[id] ?? 0), 0);
+  }
+
+  /** The OSRS-style trainable skills, grouped, each with level + XP bar. */
+  private trainedGrid(world: World): string {
+    const t = world.player.trained;
+    const chip = (id: SkillId): string => {
+      const m = SKILL_META[id];
+      const xp = t[id] ?? 0;
+      const lvl = levelForXp(xp);
+      const prog = Math.round(levelProgress(xp) * 100);
+      const maxed = lvl >= MAX_SKILL;
+      return `<div title="${m.name} — ${m.blurb}" style="display:flex;align-items:center;gap:7px;background:#101112;border:1px solid #24262a;border-radius:3px;padding:5px 7px">
+        <span style="width:17px;height:17px;color:var(--amber);flex:none;display:inline-block">${glyph(m.glyph)}</span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink)"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.name}</span><span style="color:${maxed ? "var(--amber)" : "var(--ink-dim)"};padding-left:6px">${lvl}${maxed ? "" : `/${MAX_SKILL}`}</span></div>
+          <div style="height:4px;background:#0c0d0e;border-radius:2px;overflow:hidden;margin-top:3px"><div style="width:${maxed ? 100 : prog}%;height:100%;background:${maxed ? "var(--amber)" : "#6a5aa0"}"></div></div>
+        </div>
+      </div>`;
+    };
+    const groups = SKILL_GROUPS.map((g) => {
+      const ids = SKILL_IDS.filter((id) => SKILL_META[id].group === g);
+      return `<div style="flex:1;min-width:150px">
+        <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-dim);margin:0 0 4px 2px">${g}</div>
+        <div style="display:grid;grid-template-columns:1fr;gap:4px">${ids.map(chip).join("")}</div>
+      </div>`;
+    }).join("");
+    return `<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">${groups}</div>`;
+  }
+
   private renderSkills(world: World): void {
     const p = world.player;
     const COLX = [42, 110, 178], ROWY = [46, 118, 190, 262], R = 21;
@@ -351,9 +383,11 @@ export class Hud {
     };
 
     this.skillsP.innerHTML =
-      `<div class="hud-heading">Character — Level ${p.level} · <span style="color:var(--amber)">${p.points} skill point${p.points === 1 ? "" : "s"}</span></div>` +
+      `<div class="hud-heading">Character — Level ${p.level} · <span style="color:var(--amber)">${p.points} skill point${p.points === 1 ? "" : "s"}</span> · Skill total ${this.skillTotal(world)}</div>` +
+      this.trainedGrid(world) +
+      `<div class="hud-heading" style="margin-top:14px">Perks — spend points earned by levelling up</div>` +
       `<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">${treeSvg("warfare")}${treeSvg("endurance")}${treeSvg("dominion")}</div>` +
-      `<div style="text-align:center;margin-top:8px;font-size:12px;color:var(--ink-dim)">Follow the lines — each perk unlocks the next. Hover for detail. [C] or [Esc] close</div>`;
+      `<div style="text-align:center;margin-top:8px;font-size:12px;color:var(--ink-dim)">Skills grow as you use them. Perks unlock along the lines — hover for detail. [C] or [Esc] close</div>`;
 
     this.skillsP.querySelectorAll<SVGGElement>("g[data-skill]").forEach((el) => {
       el.onclick = () => this.handlers.onSpendSkill(el.dataset["skill"]!);

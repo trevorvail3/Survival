@@ -36,6 +36,11 @@ export const GLYPHS: Record<string, string> = {
   shield: line(`<path d="M12 3 L19 6 V12 Q19 18 12 21 Q5 18 5 12 V6 Z"/><path d="M12 8 V16"/>`),
   anvil: line(`<path d="M6 10 H20 Q18 14 13 14 H11 V18 H16 M11 18 H7 M9 10 V8 H14"/>`),
   map: line(`<path d="M4 6 L9 4 L15 6 L20 4 V18 L15 20 L9 18 L4 20 Z M9 4 V18 M15 6 V20"/>`),
+  sword: line(`<path d="M6 20 L9 17 M4 20 L8 16 M8 16 L18 6 L20 4 L18 4 L16 6 L6 16 Z M12 12 L15 15"/>`),
+  axe: line(`<path d="M7 21 L14 9 M13 5 Q18 3 20 8 Q16 12 12 10 Z M14 9 L12 10"/>`),
+  pick: line(`<path d="M12 8 Q6 5 3 8 Q8 9 12 11 Q16 9 21 8 Q18 5 12 8 Z M12 11 V21"/>`),
+  fish: line(`<path d="M4 12 Q9 6 16 12 Q9 18 4 12 Z M16 12 L21 8 V16 Z"/><circle cx="8" cy="11" r="0.7"/>`),
+  leaf: line(`<path d="M6 20 Q6 8 18 5 Q19 16 8 18 M6 20 Q8 14 14 10"/>`),
 };
 
 export function glyph(name: string): string {

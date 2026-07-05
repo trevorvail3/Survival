@@ -117,6 +117,12 @@ export interface Recipe {
   forge?: number;
   /** Minimum Workshop level required. */
   workshop?: number;
+  /** OSRS skill trained by making this (SkillId). Defaults from the station. */
+  skill?: string;
+  /** XP granted on a successful craft (defaults to a per-station base). */
+  xp?: number;
+  /** Minimum level in `skill` required to make it. */
+  reqLevel?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -235,8 +241,11 @@ export interface Player {
   xp: number;
   /** Unspent skill points. */
   points: number;
-  /** Ranks purchased per skill-node id. */
+  /** Ranks purchased per skill-node id (the perk constellations). */
   skills: Record<string, number>;
+  /** OSRS-style trainable skills: total XP per skill id (level derived).
+   *  Keyed by SkillId from content/trainskills.ts. */
+  trained: Record<string, number>;
 }
 
 // ---------------------------------------------------------------------------
