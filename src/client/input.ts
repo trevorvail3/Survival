@@ -30,6 +30,21 @@ export class Input {
       this.clickY = e.clientY - r.top;
       this.clicked = true;
     });
+    // Touch: a tap on the canvas is a left-click (move / interact / attack), and
+    // its position is also the aim used by the on-screen dodge button. We call
+    // preventDefault so the browser doesn't also synthesise a duplicate mouse
+    // event (which would register the tap twice).
+    canvas.addEventListener("touchstart", (e) => {
+      const t = e.touches[0];
+      if (!t) return;
+      const r = canvas.getBoundingClientRect();
+      this.mouseX = t.clientX - r.left;
+      this.mouseY = t.clientY - r.top;
+      this.clickX = this.mouseX;
+      this.clickY = this.mouseY;
+      this.clicked = true;
+      e.preventDefault();
+    }, { passive: false });
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());
     window.addEventListener("keydown", (e) => {
       const k = e.key.toLowerCase();

@@ -269,6 +269,17 @@ export class Game {
       onSpendSkill: (nodeId: string) => { spendSkill(this.world, nodeId); },
       onStore: (i: number) => { storeToStash(this.world, this.content, i); },
       onTake: (i: number) => { takeFromStash(this.world, this.content, i); },
+      onDodge: () => {
+        const p = this.world.player;
+        if (!p.alive || this.hud.isModalOpen) return;
+        const aim = this.screenToWorld(this.input.mouseX, this.input.mouseY);
+        const ev: GameEvent[] = [];
+        dodge(this.world, aim.x, aim.y, ev);
+        this.dispatch(ev, performance.now());
+      },
+      onHotbar: (id: ItemId) => { this.useHotbar(id, performance.now()); },
+      onTogglePack: () => { this.hud.togglePack(); audio.play("click"); this.tut("pack"); },
+      onToggleSkills: () => { this.hud.toggleSkills(); audio.play("click"); },
       onTravel: (regionId: string) => {
         const ev: GameEvent[] = [];
         if (travelTo(this.world, this.content, this.rng, regionId, ev)) {

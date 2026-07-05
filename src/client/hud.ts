@@ -27,7 +27,17 @@ export interface HudHandlers {
   onSpendSkill: (nodeId: string) => void;
   onStore: (packIndex: number) => void;
   onTake: (stashIndex: number) => void;
+  onDodge: () => void;
+  onHotbar: (itemId: ItemId) => void;
+  onTogglePack: () => void;
+  onToggleSkills: () => void;
 }
+
+/** True on touch-primary devices (phones/tablets), where we surface on-screen
+ *  buttons for the actions that are otherwise keyboard/right-click only. */
+const TOUCH: boolean =
+  (typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches) ||
+  (typeof window !== "undefined" && "ontouchstart" in window);
 
 const ROLE_INFO: Record<SettlerRole, { name: string; glyph: string; effect: string }> = {
   gatherer: { name: "Gatherer", glyph: "anvil", effect: "Timber, stone & ore each dawn" },
@@ -90,6 +100,30 @@ export class Hud {
     this.audioBtn.innerHTML = ico(audio.getMuted() ? "mute" : "sound");
     this.audioBtn.onclick = () => { audio.setMuted(!audio.getMuted()); this.audioBtn.innerHTML = ico(audio.getMuted() ? "mute" : "sound"); };
     root.appendChild(this.audioBtn);
+
+    if (TOUCH) this.buildTouchControls();
+  }
+
+  /** On touch devices, surface the actions that are otherwise keyboard/right-
+   *  click only: dodge, and the Pack / Skills panels. (Settlement, travel and
+   *  stash open by tapping their props in the world.) */
+  private buildTouchControls(): void {
+    const mk = (label: string, size: number, bottom: number, font: number, onTap: () => void): void => {
+      const b = document.createElement("button");
+      b.className = "act";
+      b.innerHTML = label;
+      Object.assign(b.style, {
+        position: "absolute", right: "16px", bottom: `${bottom}px`,
+        width: `${size}px`, height: `${size}px`, padding: "0", borderRadius: "50%",
+        fontSize: `${font}px`, lineHeight: "1", display: "flex",
+        alignItems: "center", justifyContent: "center", touchAction: "manipulation",
+      } as Partial<CSSStyleDeclaration>);
+      b.onclick = onTap;
+      this.root.appendChild(b);
+    };
+    mk("↺", 68, 92, 26, () => this.handlers.onDodge());       // dodge / roll (primary)
+    mk("▤", 48, 172, 20, () => this.handlers.onTogglePack());  // pack
+    mk("✦", 48, 226, 20, () => this.handlers.onToggleSkills()); // skills
   }
 
   private panel(style: Partial<CSSStyleDeclaration>): HTMLElement {
@@ -147,6 +181,16 @@ export class Hud {
   openTravel(): void { this.mode = "travel"; this.show(); }
   openStash(): void { this.mode = "stash"; this.show(); }
   closeAll(): void { this.mode = "none"; this.show(); }
+
+  /** Append a tap-target close control to a modal panel (touch has no [Esc]).
+   *  Uses insertAdjacentHTML so it never disturbs handlers already wired on the
+   *  panel's existing contents. */
+  private addClose(panel: HTMLElement): void {
+    panel.insertAdjacentHTML("beforeend",
+      `<button class="act closeX" aria-label="close" style="position:absolute;top:8px;right:8px;width:34px;height:34px;padding:0;border-radius:50%;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center">✕</button>`);
+    const x = panel.querySelector<HTMLButtonElement>(".closeX");
+    if (x) x.onclick = () => this.closeAll();
+  }
 
   showBanner(title: string, sub: string, hold = 2200): void {
     this.banner.innerHTML = `<h1>${title}</h1><p>${sub}</p>`;
@@ -207,12 +251,16 @@ export class Hud {
     this.hotbar.innerHTML = HOTBAR.map((id, i) => {
       const def = this.content.items[id]!;
       const qty = count(world, id);
-      return `<div class="hud-panel" style="width:50px;height:50px;padding:3px;position:relative;opacity:${qty > 0 ? 1 : 0.3}">
+      return `<div class="hud-panel" data-hotbar="${id}" style="width:50px;height:50px;padding:3px;position:relative;opacity:${qty > 0 ? 1 : 0.3};cursor:${qty > 0 ? "pointer" : "default"}">
         <div style="width:100%;height:100%">${itemIconSVG(def)}</div>
         <span style="position:absolute;top:1px;left:3px;font-size:10px;color:var(--ink-dim)">${i + 1}</span>
         <span style="position:absolute;bottom:1px;right:3px;font-size:11px;color:var(--ink)">${qty || ""}</span>
       </div>`;
     }).join("");
+    this.hotbar.querySelectorAll<HTMLElement>("[data-hotbar]").forEach((el) => {
+      const id = el.dataset["hotbar"] as ItemId;
+      if (count(world, id) > 0) el.onclick = () => this.handlers.onHotbar(id);
+    });
 
     this.logEl.innerHTML = `<div class="hud-heading">Log</div>` + (this.log.length ? this.log.map((m) => `<div>${m}</div>`).join("") : `<div style="opacity:.5">…</div>`);
 
@@ -261,6 +309,7 @@ export class Hud {
       </div>`;
     this.stashP.querySelectorAll<HTMLElement>(".slot[data-store]").forEach((el) => { el.onclick = () => this.handlers.onStore(Number(el.dataset["store"])); });
     this.stashP.querySelectorAll<HTMLElement>(".slot[data-take]").forEach((el) => { el.onclick = () => this.handlers.onTake(Number(el.dataset["take"])); });
+    this.addClose(this.stashP);
   }
 
   private renderSkills(world: World): void {
@@ -309,6 +358,7 @@ export class Hud {
     this.skillsP.querySelectorAll<SVGGElement>("g[data-skill]").forEach((el) => {
       el.onclick = () => this.handlers.onSpendSkill(el.dataset["skill"]!);
     });
+    this.addClose(this.skillsP);
   }
 
   private renderTravel(world: World): void {
@@ -360,6 +410,7 @@ export class Hud {
     this.travel.querySelectorAll<SVGGElement>("g[data-travel]").forEach((el) => {
       el.onclick = () => this.handlers.onTravel(el.dataset["travel"]!);
     });
+    this.addClose(this.travel);
   }
 
   private renderPack(world: World): void {
@@ -416,6 +467,7 @@ export class Hud {
       const btn = el.querySelector("button");
       if (btn && !btn.hasAttribute("disabled")) btn.onclick = () => this.handlers.onCraft(el.dataset["recipe"]!);
     });
+    this.addClose(this.pack);
   }
 
   private renderSettlement(world: World): void {
@@ -469,6 +521,7 @@ export class Hud {
     this.settle.querySelectorAll<HTMLElement>("button.rbtn").forEach((el) => {
       if (!el.hasAttribute("disabled")) el.onclick = () => this.handlers.onAssign(el.dataset["role"] as SettlerRole, Number(el.dataset["delta"]));
     });
+    this.addClose(this.settle);
   }
 }
 
