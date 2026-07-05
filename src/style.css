@@ -1,0 +1,198 @@
+/*
+ * src/style.css
+ * -------------
+ * The look of Ashfall: cold ash, dried blood, sodium-lamp sickly amber.
+ * Headings use "Cinzel" (medieval display); body uses "EB Garamond".
+ * Everything is deliberately desaturated and dim — this is a dead world.
+ */
+
+:root {
+  --bg: #08090a;
+  --panel: rgba(14, 15, 16, 0.86);
+  --panel-edge: #2a2c2e;
+  --ink: #c3c6c4;
+  --ink-dim: #6f7472;
+  --blood: #8e2b23;
+  --blood-bright: #c23b2c;
+  --rust: #9a6a3c;
+  --amber: #c8922e;
+  --toxic: #7f9a3c;
+  --steel: #7d858c;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "EB Garamond", Georgia, serif;
+  /* Stop mobile browsers hijacking taps with zoom/scroll gestures. */
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+}
+
+#game {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: pointer;
+  image-rendering: pixelated;
+}
+
+#hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none; /* taps fall through to the canvas... */
+  font-variant-numeric: tabular-nums;
+}
+
+/* ...except on actual panels, which can be interacted with. */
+.hud-panel {
+  position: absolute;
+  pointer-events: auto;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: 3px;
+  padding: 8px 10px;
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+}
+
+.hud-heading {
+  font-family: "Cinzel", serif;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+/* Centered messages (death, day change) fade in over the whole screen. */
+.hud-banner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  pointer-events: none;
+  text-align: center;
+}
+.hud-banner h1 {
+  font-family: "Cinzel", serif;
+  font-weight: 600;
+  font-size: clamp(28px, 8vw, 64px);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--blood-bright);
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.9);
+}
+.hud-banner p {
+  font-size: 15px;
+  color: var(--ink-dim);
+  letter-spacing: 0.04em;
+}
+
+/* Prompt bubble ("[E] Pry open") near an interactable. */
+.prompt {
+  font-family: "Cinzel", serif;
+  letter-spacing: 0.06em;
+  font-size: 13px;
+}
+
+button.act {
+  pointer-events: auto;
+  font-family: "Cinzel", serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 12px;
+  color: var(--ink);
+  background: #17191a;
+  border: 1px solid var(--panel-edge);
+  border-radius: 3px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+button.act:hover {
+  border-color: var(--rust);
+  color: #fff;
+}
+button.act:active {
+  background: #101112;
+}
+
+/* The intro / title overlay. */
+#veil {
+  position: absolute;
+  inset: 0;
+  background: #060708;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  z-index: 50;
+  transition: opacity 1.2s ease;
+}
+#veil .title {
+  font-family: "Cinzel", serif;
+  font-weight: 600;
+  font-size: clamp(44px, 14vw, 120px);
+  letter-spacing: 0.32em;
+  text-indent: 0.32em;
+  color: #d8d2c8;
+  text-shadow: 0 0 40px rgba(200, 60, 40, 0.25);
+}
+#veil .tagline {
+  font-size: 14px;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+#veil .lines {
+  max-width: 620px;
+  padding: 0 24px;
+  text-align: center;
+  color: #9aa09b;
+  font-size: 16px;
+  line-height: 1.7;
+  min-height: 3.4em;
+}
+#veil .start {
+  margin-top: 8px;
+  font-family: "Cinzel", serif;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-size: 15px;
+  color: #0a0b0c;
+  background: var(--blood);
+  border: none;
+  border-radius: 3px;
+  padding: 14px 34px;
+  cursor: pointer;
+  animation: pulse 2.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; box-shadow: 0 0 24px rgba(194, 59, 44, 0.5); }
+}
