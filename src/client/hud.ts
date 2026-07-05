@@ -13,7 +13,7 @@ import { SETTLER_ROLES } from "../core/types.ts";
 import { glyph } from "./glyph.ts";
 import { itemIconSVG } from "./itemIcon.ts";
 import { canBuild, canCraft, canSpendSkill, capacity, idleSettlers, INV_COLS, isNight } from "../core/world.ts";
-import { SKILLS, TREE_NAMES, pointsInTree, xpForNext, type SkillTree } from "../content/skills.ts";
+import { SKILLS, TREE_NAMES, pointsInTree, xpForNext, nodeUnlocked, type SkillTree } from "../content/skills.ts";
 import { audio } from "./audio.ts";
 
 export interface HudHandlers {
@@ -230,37 +230,49 @@ export class Hud {
 
   private renderSkills(world: World): void {
     const p = world.player;
-    const treeCol = (tree: SkillTree): string => {
-      const spent = pointsInTree(p.skills, tree);
-      const nodes = SKILLS.filter((n) => n.tree === tree).map((n) => {
+    const COLX = [42, 110, 178], ROWY = [50, 150, 250], R = 22;
+
+    const treeSvg = (tree: SkillTree): string => {
+      const nodes = SKILLS.filter((n) => n.tree === tree);
+      const byId = new Map(nodes.map((n) => [n.id, n]));
+      const cx = (n: (typeof nodes)[number]) => COLX[n.x]!;
+      const cy = (n: (typeof nodes)[number]) => ROWY[n.y]!;
+
+      // Prerequisite lines — bright where the parent is already taken.
+      const edges = nodes.flatMap((n) => n.requires.map((rid) => {
+        const par = byId.get(rid); if (!par) return "";
+        const active = (p.skills[rid] ?? 0) > 0;
+        return `<line x1="${cx(par)}" y1="${cy(par)}" x2="${cx(n)}" y2="${cy(n)}" stroke="${active ? "#c8922e" : "#2c2e30"}" stroke-width="3"/>`;
+      })).join("");
+
+      const circles = nodes.map((n) => {
         const rank = p.skills[n.id] ?? 0;
         const maxed = rank >= n.maxRank;
-        const locked = spent < n.reqTree;
+        const unlocked = nodeUnlocked(p.skills, n);
         const can = canSpendSkill(world, n.id);
-        const pips = Array.from({ length: n.maxRank }, (_, i) => `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:3px;background:${i < rank ? "var(--amber)" : "#2a2c2e"}"></span>`).join("");
-        return `<div class="snode" style="opacity:${locked ? 0.5 : 1}">
-          <div style="flex:1">
-            <div style="color:var(--ink);font-size:13px">${n.name} <span style="font-size:11px;color:var(--ink-dim)">${rank}/${n.maxRank}</span></div>
-            <div style="font-size:11px;color:var(--toxic)">${n.effect(Math.max(1, rank))}</div>
-            ${locked ? `<div style="font-size:10px;color:var(--rust)">needs ${n.reqTree} pts in ${TREE_NAMES[tree]}</div>` : ""}
-            <div style="margin-top:3px">${pips}</div>
-          </div>
-          ${maxed ? `<span style="color:var(--amber);font-size:11px">MAX</span>` : `<button class="act sbtn" data-skill="${n.id}" ${can ? "" : "disabled"} style="width:28px;padding:6px 0;opacity:${can ? 1 : 0.35}">+</button>`}
-        </div>`;
+        let fill = "#141517", stroke = "#2a2c2e", op = "0.5";
+        if (maxed) { fill = "#e6b24e"; stroke = "#fff2cf"; op = "1"; }
+        else if (rank > 0) { fill = "#c8922e"; stroke = "#e6c07a"; op = "1"; }
+        else if (unlocked) { fill = "#1c1f22"; stroke = can ? "#c8922e" : "#5a5040"; op = "1"; }
+        const inner = rank > 0 ? `<text x="${cx(n)}" y="${cy(n) + 4}" text-anchor="middle" font-size="13" font-weight="700" fill="#141013">${rank}</text>`
+          : `<text x="${cx(n)}" y="${cy(n) + 4}" text-anchor="middle" font-size="12" fill="#5a5f5a">${n.maxRank}</text>`;
+        const tip = `${n.name} — ${n.effect(Math.max(1, rank))} · ${rank}/${n.maxRank}${!unlocked ? " · locked" : can ? " · click to raise" : ""}`;
+        return `<g data-skill="${n.id}" style="cursor:${can ? "pointer" : "default"};opacity:${op}"><title>${tip}</title>` +
+          `<circle cx="${cx(n)}" cy="${cy(n)}" r="${R}" fill="${fill}" stroke="${stroke}" stroke-width="2.5"/>${inner}` +
+          `<text x="${cx(n)}" y="${cy(n) + R + 13}" text-anchor="middle" font-size="10" fill="#c3c6c4">${n.name}</text></g>`;
       }).join("");
-      return `<div style="flex:1;min-width:180px"><div class="hud-heading" style="color:var(--amber)">${TREE_NAMES[tree]} <span style="color:var(--ink-dim);font-size:10px">${spent} pt</span></div>${nodes}</div>`;
+
+      return `<div style="flex:1;min-width:220px"><div class="hud-heading" style="color:var(--amber);text-align:center">${TREE_NAMES[tree]} · ${pointsInTree(p.skills, tree)} pt</div>` +
+        `<svg viewBox="0 0 220 300" width="100%" style="max-width:240px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">${edges}${circles}</svg></div>`;
     };
 
     this.skillsP.innerHTML =
-      `<style>.snode{display:flex;align-items:center;gap:8px;padding:7px 4px;border-bottom:1px solid #1c1e20}</style>
-      <div class="hud-heading">Character — Level ${p.level} · <span style="color:var(--amber)">${p.points} skill point${p.points === 1 ? "" : "s"}</span></div>
-      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
-        ${treeCol("warfare")}${treeCol("endurance")}${treeCol("dominion")}
-      </div>
-      <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--ink-dim)">Earn points by fighting, gathering, crafting and rescuing. [C] or [Esc] close</div>`;
+      `<div class="hud-heading">Character — Level ${p.level} · <span style="color:var(--amber)">${p.points} skill point${p.points === 1 ? "" : "s"}</span></div>` +
+      `<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">${treeSvg("warfare")}${treeSvg("endurance")}${treeSvg("dominion")}</div>` +
+      `<div style="text-align:center;margin-top:8px;font-size:12px;color:var(--ink-dim)">Follow the lines — each perk unlocks the next. Hover for detail. [C] or [Esc] close</div>`;
 
-    this.skillsP.querySelectorAll<HTMLElement>("button.sbtn").forEach((el) => {
-      if (!el.hasAttribute("disabled")) el.onclick = () => this.handlers.onSpendSkill(el.dataset["skill"]!);
+    this.skillsP.querySelectorAll<SVGGElement>("g[data-skill]").forEach((el) => {
+      el.onclick = () => this.handlers.onSpendSkill(el.dataset["skill"]!);
     });
   }
 

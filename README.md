@@ -19,11 +19,12 @@ the first time you're wounded, night falls, or the plague takes hold. It's
 skippable, and its progress is saved with your run.
 
 You **level up** as you play — kills, gathering, crafting and rescues all grant
-XP — and spend the skill points you earn across three trees that fit the world:
-**Warfare** (damage, crit, armour-sunder, a cleave capstone, vigour), **Endurance**
-(slower hunger/thirst, plague-ward, forager yields, fleet-foot, dark-sight), and
-**Dominion** (cheaper builds, richer tribute, healing, hardened guards, more
-settlers). Open the character sheet with **C**.
+XP — and spend skill points on three branching **constellations** (Skyrim /
+Cyberpunk style: follow the lines, each perk unlocks the next):
+**Warfare** (Butchery → Keen Edge / Vigour → Bulwark / Sunder → Cleave),
+**Endurance** (Iron Gut → Forager / Plague-ward → Dark-sight / Fleet-foot), and
+**Dominion** (Master Builder → Bountiful / Warden → Quartermaster / Field Medic).
+Open the character sheet with **C**.
 
 ## How it plays
 

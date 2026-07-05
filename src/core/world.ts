@@ -30,7 +30,7 @@ import { generateHome, generateRegion } from "../content/map.ts";
 import { regionById } from "../content/regions.ts";
 import { rollLoot } from "../content/loot.ts";
 import { settlementCapacity } from "../content/settlement.ts";
-import { computeMods, pointsInTree, SKILLS, xpForNext } from "../content/skills.ts";
+import { computeMods, nodeUnlocked, SKILLS, xpForNext } from "../content/skills.ts";
 import type { Mods } from "../content/skills.ts";
 
 export const PLAYER_RADIUS = 0.34;
@@ -194,7 +194,7 @@ export function canSpendSkill(world: World, nodeId: string): boolean {
   const node = SKILLS.find((n) => n.id === nodeId);
   if (!node) return false;
   if ((p.skills[nodeId] ?? 0) >= node.maxRank) return false;
-  return pointsInTree(p.skills, node.tree) >= node.reqTree;
+  return nodeUnlocked(p.skills, node); // every prerequisite has a rank
 }
 
 export function spendSkill(world: World, nodeId: string): boolean {
@@ -517,7 +517,7 @@ function attackPlayer(world: World, content: Content, e: Enemy, out: GameEvent[]
   const p = world.player;
   const eDef = content.enemies[e.kind];
   const armorVal = p.armor ? content.items[p.armor]?.armor ?? 0 : 0;
-  const dmg = Math.max(1, Math.round(eDef.damage * (0.9 + Math.random() * 0.2)) - armorVal);
+  const dmg = Math.max(1, Math.round(eDef.damage * (0.9 + Math.random() * 0.2)) - armorVal - playerMods(p).dmgReduce);
   p.hp -= dmg;
   out.push({ t: "playerHurt", dmg });
   const infect = (e.kind === "revenant" ? 8 : e.kind === "wretch" ? 12 : e.boss ? 10 : 6) * playerMods(p).infectionMult;
