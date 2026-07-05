@@ -30,6 +30,7 @@ import { Input } from "./input.ts";
 import { Hud, HOTBAR } from "./hud.ts";
 import { audio } from "./audio.ts";
 import { clearSave, saveGame } from "./save.ts";
+import { Tutorial } from "./onboarding.ts";
 
 export class Game {
   private g: CanvasRenderingContext2D;
@@ -44,6 +45,7 @@ export class Game {
   private events: GameEvent[] = [];
   private pendingStation: number | null = null;
   private lastSave = 0;
+  private tutorial: Tutorial;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -56,6 +58,7 @@ export class Game {
     private seed: number,
   ) {
     this.g = canvas.getContext("2d")!;
+    this.tutorial = new Tutorial(world);
     this.resize();
     window.addEventListener("resize", () => this.resize());
     this.cam.x = world.player.pos.x * TILE - this.viewW / this.zoom / 2;
@@ -87,7 +90,7 @@ export class Game {
     this.events.length = 0;
 
     // --- Input: clicks + hotkeys ---
-    if (this.input.pressed("tab")) { this.hud.togglePack(); audio.play("click"); }
+    if (this.input.pressed("tab")) { this.hud.togglePack(); audio.play("click"); this.tut("pack"); }
     if (this.input.pressed("escape")) this.hud.closeAll();
 
     const click = this.input.consumeClick();
@@ -106,12 +109,21 @@ export class Game {
       const pr = world.props.find((x) => x.id === this.pendingStation);
       if (pr && Math.hypot(pr.pos.x + 0.5 - p.pos.x, pr.pos.y + 0.5 - p.pos.y) < 1.8) {
         if (pr.kind === "hearth") { restAtHearth(world, this.content, this.rng, this.events); this.dispatch(this.events, now); this.events.length = 0; }
-        else if (pr.kind === "townboard") this.hud.openSettlement();
+        else if (pr.kind === "townboard") { this.hud.openSettlement(); this.tut("board"); }
         else if (pr.kind === "waystone") this.hud.openTravel();
-        else if (pr.kind === "forge" || pr.kind === "workbench") this.hud.openPack();
+        else if (pr.kind === "forge" || pr.kind === "workbench") { this.hud.openPack(); this.tut("pack"); }
       }
       this.pendingStation = null;
     }
+
+    // --- Onboarding: state-driven tips + refresh the objective tracker ---
+    if (p.alive) {
+      if (p.hunger < 25) this.tut("hungry");
+      if (p.thirst < 25) this.tut("thirsty");
+      if (p.infection > 0) this.tut("infected");
+      if (world.enemies.some((e) => e.boss && (e.state === "hunt" || e.state === "attack"))) this.tut("boss");
+    }
+    this.hud.setTask(this.tutorial.currentTask());
 
     // --- Low-HP heartbeat ---
     if (p.alive && p.hp / p.maxHp < 0.3 && now > this.nextHeartbeat) { audio.play("lowhp"); this.nextHeartbeat = now + 1100; }
@@ -143,7 +155,13 @@ export class Game {
   /** Persist now (e.g. on tab close), unless the run is already over. */
   save(): void { if (this.world.player.alive) saveGame(this.world, this.seed); }
 
+  /** Feed a signal to the tutorial and toast anything it returns. */
+  private tut(sig: string): void {
+    for (const t of this.tutorial.notify(sig)) this.hud.tip(t);
+  }
+
   private handleClick(sx: number, sy: number): void {
+    this.tut("move"); // any click teaches point-to-act
     const wpt = this.screenToWorld(sx, sy);
     // 1. A foe under the cursor?
     let foe = null as null | (typeof this.world.enemies)[number];
@@ -229,9 +247,11 @@ export class Game {
       onAssign: (role: SettlerRole, delta: number) => { assignRole(this.world, role, delta); },
       onEquip: (id: ItemId) => { const ev: GameEvent[] = []; useSlotById(this.world, this.content, id, ev); this.dispatch(ev, performance.now()); },
       onUseSlot: (i: number) => { const ev: GameEvent[] = []; useSlot(this.world, this.content, i, ev); this.dispatch(ev, performance.now()); },
+      onSkipTutorial: () => { this.tutorial.skip(); this.hud.setTask(null); },
       onTravel: (regionId: string) => {
         const ev: GameEvent[] = [];
         if (travelTo(this.world, this.content, this.rng, regionId, ev)) {
+          this.tut("travel");
           this.hud.closeAll();
           this.snapCamera();
           const name = regionId === "home" ? "Your Settlement" : (this.content.regions.find((r) => r.id === regionId)?.name ?? "the wilds");
@@ -260,20 +280,20 @@ export class Game {
         case "explode": audio.play("explode"); this.fx.explosion(e.x, e.y); this.shake = Math.max(this.shake, 14); break;
         case "kill": audio.creature(e.kind, "die"); this.fx.blood(e.x, e.y, 22); break;
         case "aggro": audio.creature(e.kind, "aggro"); audio.sting(); break;
-        case "playerHurt": audio.play("hurt"); this.fx.float(p.pos.x, p.pos.y - 0.6, `-${e.dmg}`, "#ff4a3a", 15); this.fx.blood(p.pos.x, p.pos.y, 6); this.shake = Math.max(this.shake, 6 + e.dmg * 0.2); break;
+        case "playerHurt": audio.play("hurt"); this.fx.float(p.pos.x, p.pos.y - 0.6, `-${e.dmg}`, "#ff4a3a", 15); this.fx.blood(p.pos.x, p.pos.y, 6); this.shake = Math.max(this.shake, 6 + e.dmg * 0.2); this.tut("hurt"); break;
         case "pickup": audio.play("pickup"); this.hud.pushLog(`+${e.qty} ${this.content.items[e.id]?.name ?? e.id}`); break;
-        case "gather": audio.play("gather"); break;
-        case "search": audio.play("search"); break;
-        case "craft": audio.play("craft"); this.hud.pushLog(`Crafted ${this.content.items[e.id]?.name ?? e.id}.`); break;
+        case "gather": audio.play("gather"); this.tut("gather"); break;
+        case "search": audio.play("search"); this.tut("search"); break;
+        case "craft": audio.play("craft"); this.hud.pushLog(`Crafted ${this.content.items[e.id]?.name ?? e.id}.`); this.tut("craft"); break;
         case "build": audio.play("build"); this.hud.pushLog(`${this.content.structures[e.id].name} raised to level ${e.level}.`); this.hud.showBanner(this.content.structures[e.id].name, `Level ${e.level}`, 1500); break;
-        case "recruit": audio.play("recruit"); break;
+        case "recruit": audio.play("recruit"); this.tut("rescue"); break;
         case "heal": audio.play("heal"); break;
         case "eat": audio.play("eat"); break;
         case "drink": audio.play("drink"); break;
         case "cure": audio.play("heal"); this.hud.pushLog("The fever recedes."); break;
         case "equip": audio.play("equip"); break;
         case "dayBreak": audio.play("daybreak"); audio.setScene("day"); this.hud.showBanner(`Day ${e.day}`, "You saw the dawn.", 2200); break;
-        case "nightFall": audio.play("nightfall"); audio.setScene("night"); this.hud.showBanner("Nightfall", "The dead walk. Hold your walls.", 2200); break;
+        case "nightFall": audio.play("nightfall"); audio.setScene("night"); this.hud.showBanner("Nightfall", "The dead walk. Hold your walls.", 2200); this.tut("night"); break;
         case "death": audio.play("death"); audio.setScene("day"); clearSave(); this.hud.showDeath(this.world.day); break;
         case "log": this.hud.pushLog(e.msg); break;
       }

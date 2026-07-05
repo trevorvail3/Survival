@@ -195,6 +195,7 @@ export function createWorld(content: Content, rng: () => number): World {
     entry: { ...layout.playerStart },
     homeCache: null,
     bossesSlain: [],
+    onboard: { step: 0, seen: [] },
     timeOfDay: 0.28,
     day: 1,
     clock: 0,

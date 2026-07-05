@@ -300,6 +300,8 @@ export interface World {
   homeCache: ZoneSnapshot | null;
   /** Named bosses already slain this run — they do not return. */
   bossesSlain: string[];
+  /** Onboarding progress (persisted with the run): current step + seen tips. */
+  onboard: { step: number; seen: string[] };
   timeOfDay: number;
   day: number;
   clock: number;

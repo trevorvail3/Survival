@@ -38,6 +38,7 @@ const handlers: HudHandlers = {
   onUseSlot: (i) => gameHandlers?.onUseSlot(i),
   onTravel: (id) => gameHandlers?.onTravel(id),
   onAssign: (role, delta) => gameHandlers?.onAssign(role, delta),
+  onSkipTutorial: () => gameHandlers?.onSkipTutorial(),
 };
 const hud = new Hud(hudRoot, content, handlers);
 

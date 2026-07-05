@@ -12,6 +12,12 @@ project.
 
 > The plague took the living, and would not let them lie still.
 
+New here? A **learn-by-doing tutorial** guides your first steps — an objective
+tracker that advances as you actually move, gather, search, open your pack, use
+the town board, set out, and rescue your first survivor, with contextual tips
+the first time you're wounded, night falls, or the plague takes hold. It's
+skippable, and its progress is saved with your run.
+
 ## How it plays
 
 - **Point-and-click, like `world`/old-school RuneScape.** Click the ground to

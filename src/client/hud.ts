@@ -23,6 +23,7 @@ export interface HudHandlers {
   onUseSlot: (slotIndex: number) => void;
   onTravel: (regionId: string) => void;
   onAssign: (role: SettlerRole, delta: number) => void;
+  onSkipTutorial: () => void;
 }
 
 const ROLE_INFO: Record<SettlerRole, { name: string; glyph: string; effect: string }> = {
@@ -45,11 +46,15 @@ export class Hud {
   private settle: HTMLElement;
   private travel: HTMLElement;
   private bossBar: HTMLElement;
+  private tracker: HTMLElement;
+  private tipEl: HTMLElement;
   private banner: HTMLElement;
   private audioBtn: HTMLButtonElement;
   private mode: "none" | "pack" | "settle" | "travel" = "none";
   private near: NearStations = { forge: false, workshop: false };
   private log: string[] = [];
+  private tipTimer = 0;
+  private lastTask: string | null = null;
 
   constructor(private root: HTMLElement, private content: Content, private handlers: HudHandlers) {
     root.innerHTML = "";
@@ -63,6 +68,8 @@ export class Hud {
     this.travel = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(520px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none" });
 
     this.bossBar = this.floating({ left: "50%", top: "64px", transform: "translateX(-50%)", width: "min(440px,72vw)", display: "none", textAlign: "center" });
+    this.tracker = this.panel({ left: "12px", top: "172px", maxWidth: "230px", display: "none" });
+    this.tipEl = this.floating({ left: "50%", top: "112px", transform: "translateX(-50%)", width: "min(460px,86vw)", textAlign: "center", opacity: "0", transition: "opacity 0.5s ease", pointerEvents: "none" });
 
     this.banner = document.createElement("div");
     this.banner.className = "hud-banner";
@@ -94,6 +101,28 @@ export class Hud {
   }
 
   pushLog(msg: string): void { this.log.push(msg); if (this.log.length > 6) this.log.shift(); }
+
+  /** A transient onboarding/contextual tip, shown as a fading note. */
+  tip(msg: string): void {
+    this.tipEl.innerHTML = `<div style="display:inline-block;background:var(--panel);border:1px solid var(--amber);border-radius:4px;padding:9px 14px;font-size:14px;color:var(--ink);box-shadow:0 4px 18px rgba(0,0,0,0.6);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)">${msg}</div>`;
+    this.tipEl.style.opacity = "1";
+    if (this.tipTimer) clearTimeout(this.tipTimer);
+    this.tipTimer = window.setTimeout(() => { this.tipEl.style.opacity = "0"; }, 4600);
+  }
+
+  /** Show/refresh the current onboarding objective (null hides the tracker). */
+  setTask(task: string | null): void {
+    if (task === this.lastTask) return;
+    this.lastTask = task;
+    if (!task) { this.tracker.style.display = "none"; return; }
+    this.tracker.style.display = "block";
+    this.tracker.innerHTML =
+      `<div class="hud-heading" style="color:var(--amber)">Objective</div>` +
+      `<div style="font-size:13px;color:var(--ink);line-height:1.45">${task}</div>` +
+      `<div style="margin-top:7px"><span id="tutSkip" style="font-size:11px;color:var(--ink-dim);cursor:pointer;pointer-events:auto;text-decoration:underline">skip tutorial</span></div>`;
+    const sk = this.tracker.querySelector<HTMLElement>("#tutSkip");
+    if (sk) sk.onclick = () => this.handlers.onSkipTutorial();
+  }
 
   get isModalOpen(): boolean { return this.mode !== "none"; }
   private show(): void {

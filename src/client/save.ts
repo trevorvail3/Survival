@@ -12,7 +12,7 @@
 import type { World } from "../core/types.ts";
 
 const SAVE_KEY = "ashfall-save";
-const SAVE_VERSION = 2;
+const SAVE_VERSION = 3;
 
 interface SaveBlob {
   v: number;
