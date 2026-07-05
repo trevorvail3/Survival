@@ -16,6 +16,7 @@ import type {
   Enemy,
   EnemyKind,
   InvSlot,
+  ItemDef,
   ItemId,
   Player,
   Prop,
@@ -29,7 +30,8 @@ import { findPath, pathToAdjacent } from "../client/pathfinding.ts";
 import { generateHome, generateRegion } from "../content/map.ts";
 import { regionById } from "../content/regions.ts";
 import { rollLoot } from "../content/loot.ts";
-import { settlementCapacity } from "../content/settlement.ts";
+import { settlementCapacity, SETTLER_NAMES } from "../content/settlement.ts";
+import { pick } from "./rng.ts";
 import { computeMods, nodeUnlocked, SKILLS, xpForNext } from "../content/skills.ts";
 import type { Mods } from "../content/skills.ts";
 
@@ -37,6 +39,7 @@ export const PLAYER_RADIUS = 0.34;
 export const INV_COLS = 6;
 export const INV_ROWS = 5;
 export const INV_SIZE = INV_COLS * INV_ROWS;
+export const STASH_SIZE = 48;
 export const WALK_SPEED = 3.4; // tiles/sec
 const RESOURCE_RESPAWN_MS = 45_000;
 
@@ -56,6 +59,7 @@ export function daylight(timeOfDay: number): number {
 export type GameEvent =
   | { t: "melee"; x: number; y: number }
   | { t: "bowshot"; x: number; y: number }
+  | { t: "dodge"; x: number; y: number }
   | { t: "noammo" }
   | { t: "hit"; x: number; y: number; dmg: number; crit: boolean }
   | { t: "throw" }
@@ -70,6 +74,7 @@ export type GameEvent =
   | { t: "build"; id: StructureId; level: number }
   | { t: "recruit" }
   | { t: "levelUp"; level: number }
+  | { t: "victory" }
   | { t: "heal" }
   | { t: "eat" }
   | { t: "drink" }
@@ -77,7 +82,7 @@ export type GameEvent =
   | { t: "equip" }
   | { t: "dayBreak"; day: number }
   | { t: "nightFall"; day: number }
-  | { t: "death" }
+  | { t: "downed"; dropped: number }
   | { t: "log"; msg: string };
 
 // ---------------------------------------------------------------------------
@@ -120,11 +125,10 @@ export function countItem(player: Player, id: ItemId): number {
   for (const s of player.inv) if (s && s.id === id) n += s.qty;
   return n;
 }
-export function addItem(player: Player, content: Content, id: ItemId, qty: number): number {
-  const def = content.items[id];
-  if (!def) return qty;
+/** Stack `qty` of `id` into a slot array; returns the remainder that didn't fit. */
+function addStack(slots: (InvSlot | null)[], def: ItemDef, id: ItemId, qty: number): number {
   let left = qty;
-  for (const s of player.inv) {
+  for (const s of slots) {
     if (left <= 0) break;
     if (s && s.id === id && s.qty < def.stack) {
       const add = Math.min(def.stack - s.qty, left);
@@ -132,14 +136,42 @@ export function addItem(player: Player, content: Content, id: ItemId, qty: numbe
       left -= add;
     }
   }
-  for (let i = 0; i < player.inv.length && left > 0; i++) {
-    if (!player.inv[i]) {
+  for (let i = 0; i < slots.length && left > 0; i++) {
+    if (!slots[i]) {
       const add = Math.min(def.stack, left);
-      player.inv[i] = { id, qty: add };
+      slots[i] = { id, qty: add };
       left -= add;
     }
   }
   return left;
+}
+
+export function addItem(player: Player, content: Content, id: ItemId, qty: number): number {
+  const def = content.items[id];
+  if (!def) return qty;
+  return addStack(player.inv, def, id, qty);
+}
+
+/** Deposit a pack slot into the settlement stash. */
+export function storeToStash(world: World, content: Content, packIndex: number): void {
+  const s = world.player.inv[packIndex];
+  if (!s) return;
+  const def = content.items[s.id];
+  if (!def) return;
+  const left = addStack(world.stash, def, s.id, s.qty);
+  if (left <= 0) world.player.inv[packIndex] = null;
+  else s.qty = left;
+}
+
+/** Withdraw a stash slot into the pack. */
+export function takeFromStash(world: World, content: Content, stashIndex: number): void {
+  const s = world.stash[stashIndex];
+  if (!s) return;
+  const def = content.items[s.id];
+  if (!def) return;
+  const left = addStack(world.player.inv, def, s.id, s.qty);
+  if (left <= 0) world.stash[stashIndex] = null;
+  else s.qty = left;
 }
 export function removeItem(player: Player, id: ItemId, qty: number): boolean {
   if (countItem(player, id) < qty) return false;
@@ -243,6 +275,10 @@ export function createWorld(content: Content, rng: () => number): World {
     nextAttack: 0,
     infection: 0,
     alive: true,
+    invulnUntil: 0,
+    dashUntil: 0,
+    dashReadyAt: 0,
+    dashDir: { x: 1, y: 0 },
     level: 1,
     xp: 0,
     points: 0,
@@ -261,12 +297,14 @@ export function createWorld(content: Content, rng: () => number): World {
     enemies: [],
     ground: [],
     props: layout.props,
-    settlement: { structures: { palisade: 1, forge: 0, workshop: 0, quarters: 1 }, population: 0, roles: { gatherer: 0, forager: 0, guard: 0 } },
+    settlement: { structures: { palisade: 1, forge: 0, workshop: 0, quarters: 1 }, population: 0, roles: { gatherer: 0, forager: 0, guard: 0 }, names: [] },
+    stash: new Array(STASH_SIZE).fill(null),
     home: layout.home,
     zoneId: "home",
     entry: { ...layout.playerStart },
     homeCache: null,
     bossesSlain: [],
+    won: false,
     onboard: { step: 0, seen: [] },
     timeOfDay: 0.28,
     day: 1,
@@ -314,6 +352,10 @@ export function travelTo(world: World, content: Content, rng: () => number, targ
   } else {
     const def = regionById(targetId);
     if (!def) return false;
+    if (def.requires && !def.requires.every((k) => world.bossesSlain.includes(k))) {
+      out.push({ t: "log", msg: "The way is sealed until the Vale's wardens have fallen." });
+      return false;
+    }
     const layout = generateRegion(rng, def);
     world.map = layout.map; world.props = layout.props; world.ground = [];
     // A boss that has already been slain this run does not return.
@@ -380,6 +422,26 @@ export function stop(world: World): void {
   world.player.path = [];
 }
 
+export const DODGE_COOLDOWN = 1600;
+
+/** A quick evasive dash toward (tx,ty) with brief invulnerability. The one
+ *  active-defense verb: time it to slip a blow, especially a boss's. */
+export function dodge(world: World, tx: number, ty: number, out: GameEvent[]): boolean {
+  const p = world.player;
+  if (!p.alive || world.clock < p.dashReadyAt || world.clock < p.dashUntil) return false;
+  let dx = tx - p.pos.x, dy = ty - p.pos.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 0.3) { dx = Math.cos(p.facing); dy = Math.sin(p.facing); }
+  else { dx /= len; dy /= len; }
+  p.dashDir = { x: dx, y: dy };
+  p.dashUntil = world.clock + 240;
+  p.invulnUntil = world.clock + 300;
+  p.dashReadyAt = world.clock + DODGE_COOLDOWN;
+  p.facing = Math.atan2(dy, dx);
+  out.push({ t: "dodge", x: p.pos.x, y: p.pos.y });
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // Player advance: follow path, execute order, auto-fight
 // ---------------------------------------------------------------------------
@@ -407,9 +469,19 @@ function followPath(world: World, dt: number): boolean {
   return p.path.length === 0;
 }
 
+const DASH_SPEED = 10;
+
 function advancePlayer(world: World, content: Content, ctx: { rng: () => number }, dt: number, out: GameEvent[]): void {
   const p = world.player;
   if (!p.alive) return;
+  // A dodge in progress overrides orders: a fast lunge, then normal control.
+  if (world.clock < p.dashUntil) {
+    const nx = p.pos.x + p.dashDir.x * DASH_SPEED * dt;
+    const ny = p.pos.y + p.dashDir.y * DASH_SPEED * dt;
+    if (!blocked(world, nx, p.pos.y, PLAYER_RADIUS)) p.pos.x = nx;
+    if (!blocked(world, p.pos.x, ny, PLAYER_RADIUS)) p.pos.y = ny;
+    return;
+  }
   const order = p.order;
 
   if (order.type === "attack") {
@@ -502,6 +574,7 @@ function damageEnemy(world: World, content: Content, ctx: { rng: () => number },
     if (e.boss) {
       if (!world.bossesSlain.includes(e.kind)) world.bossesSlain.push(e.kind);
       out.push({ t: "log", msg: `${content.enemies[e.kind].name} falls. Its hoard is yours.` });
+      if (e.kind === "rotmother" && !world.won) { world.won = true; out.push({ t: "victory" }); }
     }
     grantXp(world, content.enemies[e.kind].bounty * 8 + 5, out);
   } else if (e.state === "idle" || e.state === "wander") {
@@ -516,6 +589,7 @@ function spawnGround(world: World, id: ItemId, qty: number, x: number, y: number
 
 function attackPlayer(world: World, content: Content, e: Enemy, out: GameEvent[]): void {
   const p = world.player;
+  if (world.clock < p.invulnUntil) return; // dodged — no damage
   const eDef = content.enemies[e.kind];
   const armorVal = p.armor ? content.items[p.armor]?.armor ?? 0 : 0;
   const dmg = Math.max(1, Math.round(eDef.damage * (0.9 + Math.random() * 0.2)) - armorVal - playerMods(p).dmgReduce);
@@ -523,7 +597,28 @@ function attackPlayer(world: World, content: Content, e: Enemy, out: GameEvent[]
   out.push({ t: "playerHurt", dmg });
   const infect = (e.kind === "revenant" ? 8 : e.kind === "wretch" ? 12 : e.boss ? 10 : 6) * playerMods(p).infectionMult;
   p.infection = Math.min(100, p.infection + infect);
-  if (p.hp <= 0) { p.hp = 0; p.alive = false; out.push({ t: "death" }); }
+}
+
+/**
+ * You don't die for good — your people drag you back to the settlement. You
+ * lose the pack you were carrying (but keep what you wield and wear, your
+ * level, skills, storage and settlement). A real setback, not a wipe.
+ */
+function downPlayer(world: World, content: Content, rng: () => number, out: GameEvent[]): void {
+  const p = world.player;
+  const dropped = p.inv.filter(Boolean).length;
+  for (let i = 0; i < p.inv.length; i++) p.inv[i] = null;
+  if (p.equipped) addItem(p, content, p.equipped, 1);
+  if (p.armor) addItem(p, content, p.armor, 1);
+  p.hp = Math.max(1, Math.round(p.maxHp * 0.5));
+  p.infection = 0;
+  p.hunger = Math.max(p.hunger, 25);
+  p.thirst = Math.max(p.thirst, 25);
+  p.nextAttack = 0; p.dashUntil = 0; p.invulnUntil = 0;
+  if (world.zoneId !== "home") travelTo(world, content, rng, "home", out);
+  else { p.pos = { x: world.entry.x + 0.5, y: world.entry.y + 0.5 }; stop(world); }
+  world.timeOfDay = 0.28;
+  out.push({ t: "downed", dropped });
 }
 
 // ---------------------------------------------------------------------------
@@ -544,7 +639,7 @@ export function nearestProp(world: World, maxDist: number): Prop | null {
 
 /** Non-searchable stations open UI instead of giving loot. */
 export function isStation(kind: Prop["kind"]): boolean {
-  return kind === "forge" || kind === "workbench" || kind === "hearth" || kind === "townboard" || kind === "maptable" || kind === "gate";
+  return kind === "forge" || kind === "workbench" || kind === "hearth" || kind === "townboard" || kind === "maptable" || kind === "stash" || kind === "gate";
 }
 
 function resolveInteract(world: World, content: Content, ctx: { rng: () => number }, pr: Prop, out: GameEvent[]): void {
@@ -558,8 +653,10 @@ function resolveInteract(world: World, content: Content, ctx: { rng: () => numbe
     }
     pr.used = true;
     world.settlement.population++;
+    const name = pick(ctx.rng, SETTLER_NAMES);
+    world.settlement.names.push(name);
     out.push({ t: "recruit" });
-    out.push({ t: "log", msg: "A survivor joins your settlement." });
+    out.push({ t: "log", msg: `${name} joins your settlement.` });
     grantXp(world, 45, out);
     return;
   }
@@ -741,7 +838,6 @@ export function tick(world: World, content: Content, ctx: { now: number; rng: ()
   let regen = pm.regen;
   if (world.zoneId === "home") regen += pm.rallyRegen;
   if (regen > 0 && p.hp > 0) p.hp = Math.min(p.maxHp, p.hp + regen * dt);
-  if (p.hp <= 0 && p.alive) { p.hp = 0; p.alive = false; out.push({ t: "death" }); return; }
 
   // Night raids — at home, thinned by the Palisade + Guards and kept outside the
   // walls; in the wilds they come unchecked.
@@ -806,6 +902,9 @@ export function tick(world: World, content: Content, ctx: { now: number; rng: ()
     }
   }
   world.ground = world.ground.filter((g) => g.item.qty > 0);
+
+  // Fall → dragged home (not a permadeath wipe).
+  if (p.hp <= 0) downPlayer(world, content, ctx.rng, out);
 
   if (world.enemies.length > 140) world.enemies = world.enemies.filter((e) => e.state !== "dead");
 }

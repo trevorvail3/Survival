@@ -95,7 +95,7 @@ export function generateHome(rng: () => number): Layout {
   addProp("workbench", cx + 5, cy - 2);
   addProp("townboard", cx - 1, cy - 4);
   addProp("maptable", cx + 2, cy - 4); // the war map — set out on expeditions
-  addProp("chest", x0 + 4, y0 + 3, "chest");
+  addProp("stash", cx + 4, cy + 1); // settlement storage — safe from death
   addProp("barrel", x1 - 2, cy + 3, "barrel");
 
   // A little yard to gather in right by home.

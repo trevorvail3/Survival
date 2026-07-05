@@ -105,6 +105,14 @@ export const LOOT: Record<string, LootEntry[]> = {
     { id: "plate", chance: 0.4, min: 1, max: 1 },
     { id: "poultice", chance: 1, min: 2, max: 4 },
   ],
+  // The Rot-Mother — the run's end; her death is its own reward, plus a hoard.
+  kill_rotmother: [
+    { id: "iron", chance: 1, min: 20, max: 30 },
+    { id: "steel_sword", chance: 1, min: 1, max: 1 },
+    { id: "plate", chance: 1, min: 1, max: 1 },
+    { id: "poultice", chance: 1, min: 4, max: 6 },
+    { id: "antidote", chance: 1, min: 3, max: 5 },
+  ],
   // The Pale Prior — physic, mail, and a warbow from the abbey's armoury.
   kill_prior: [
     { id: "iron", chance: 1, min: 6, max: 12 },

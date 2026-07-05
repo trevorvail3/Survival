@@ -40,6 +40,12 @@ const handlers: HudHandlers = {
   onAssign: (role, delta) => gameHandlers?.onAssign(role, delta),
   onSkipTutorial: () => gameHandlers?.onSkipTutorial(),
   onSpendSkill: (id) => gameHandlers?.onSpendSkill(id),
+  onStore: (i) => gameHandlers?.onStore(i),
+  onTake: (i) => gameHandlers?.onTake(i),
+  onDodge: () => gameHandlers?.onDodge(),
+  onHotbar: (id) => gameHandlers?.onHotbar(id),
+  onTogglePack: () => gameHandlers?.onTogglePack(),
+  onToggleSkills: () => gameHandlers?.onToggleSkills(),
 };
 const hud = new Hud(hudRoot, content, handlers);
 
@@ -70,8 +76,8 @@ veil.innerHTML = `
     <button class="start" id="startBtn" ${saved ? `style="background:#2a2622;color:#c3c6c4"` : ""}>${saved ? "New Game" : "Take Up the Blade"}</button>
   </div>
   <div style="font-size:12px;color:#5a5f5a;letter-spacing:.08em;max-width:640px;text-align:center;line-height:1.8">
-    <b>Click</b> to move · click a foe to fight · click to search &amp; gather · <b>1–5</b> use items · <b>Tab</b> pack &amp; craft · <b>C</b> skills<br/>
-    the <b>town board</b> builds your settlement &amp; assigns rescued survivors · the <b>waystone</b> sets out on expeditions
+    <b>Click / tap</b> to move · tap a foe to fight · tap to search &amp; gather · dodge with <b>Space</b>/<b>right-click</b> or the <b>↺</b> button<br/>
+    hotbar <b>1–5</b> or tap a slot · pack <b>Tab</b>/<b>▤</b> · skills <b>C</b>/<b>✦</b> · the <b>town board</b> and <b>waystone</b> in your yard manage the settlement &amp; expeditions
   </div>`;
 app.appendChild(veil);
 

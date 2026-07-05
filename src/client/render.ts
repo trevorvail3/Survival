@@ -247,6 +247,16 @@ function drawProp(g: CanvasRenderingContext2D, pr: Prop, now: number): void {
         g.fillStyle = "#caa07a"; g.beginPath(); g.arc(cx, cy - TILE * 0.12, TILE * 0.13, 0, Math.PI * 2); g.fill();
       }
       break;
+    case "stash": {
+      // A big banded storage chest (distinct from lootable chests).
+      g.fillStyle = "#4a3620"; rr(g, cx - TILE * 0.42, cy - TILE * 0.28, TILE * 0.84, TILE * 0.56, 3); g.fill();
+      g.strokeStyle = "#20160c"; g.lineWidth = 2.5; g.stroke();
+      g.fillStyle = "#2a1d10"; g.fillRect(cx - TILE * 0.42, cy - TILE * 0.02, TILE * 0.84, 4);
+      g.strokeStyle = "#8a6a3a"; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(cx - TILE * 0.22, cy - TILE * 0.28); g.lineTo(cx - TILE * 0.22, cy + TILE * 0.28); g.moveTo(cx + TILE * 0.22, cy - TILE * 0.28); g.lineTo(cx + TILE * 0.22, cy + TILE * 0.28); g.stroke();
+      g.fillStyle = "#caa24a"; g.fillRect(cx - 2, cy - 2, 4, 6);
+      break;
+    }
     case "maptable": {
       // A cartographer's table: legs, a parchment map, and a few markers.
       g.fillStyle = "#4a3826";
@@ -316,18 +326,20 @@ function drawEnemy(g: CanvasRenderingContext2D, e: Enemy, now: number): void {
     case "revenant": body = "#4a4e54"; head = "#6a707a"; size = 0.44; break;
     case "graveking": body = "#33373e"; head = "#565d66"; size = 0.72; break;
     case "prior": body = "#2c2a34"; head = "#c9c1b6"; size = 0.58; break;
+    case "rotmother": body = "#4a5230"; head = "#6a7038"; size = 1.0; break;
     default: body = "#444"; head = "#666"; size = 0.32;
   }
   if (hurt) body = "#8e2b23";
 
-  // Bosses drag a baleful aura — red for the King, sickly green for the Prior.
+  // Bosses drag a baleful aura — red King, green Prior, putrid Rot-Mother.
   if (e.boss) {
-    const key = e.kind === "prior" ? "prioraura" : "kingaura";
-    const stops: [number, string][] = e.kind === "prior"
-      ? [[0, "rgba(120,150,60,0.4)"], [1, "rgba(120,150,60,0)"]]
-      : [[0, "rgba(180,30,20,0.4)"], [1, "rgba(180,30,20,0)"]];
-    const aura = discSprite(key, 64, stops);
-    const s = R(1.6);
+    const auraCol: Record<string, [number, string][]> = {
+      prior: [[0, "rgba(120,150,60,0.4)"], [1, "rgba(120,150,60,0)"]],
+      rotmother: [[0, "rgba(110,140,40,0.5)"], [1, "rgba(110,140,40,0)"]],
+    };
+    const stops = auraCol[e.kind] ?? [[0, "rgba(180,30,20,0.4)"], [1, "rgba(180,30,20,0)"]];
+    const aura = discSprite(`aura_${e.kind}`, 64, stops);
+    const s = R(e.kind === "rotmother" ? 2.4 : 1.6);
     g.drawImage(aura, -s, -s, s * 2, s * 2);
   }
 
@@ -359,6 +371,13 @@ function drawEnemy(g: CanvasRenderingContext2D, e: Enemy, now: number): void {
     g.strokeStyle = "#b9c0c8"; g.lineWidth = R(0.08); g.lineCap = "round";
     g.beginPath(); g.moveTo(R(size * 0.85), R(0.2)); g.lineTo(R(size * 0.85), R(-1.0)); g.stroke();
   }
+  if (e.kind === "rotmother") {
+    // A bloated, many-eyed horror — pustules and weeping sores.
+    g.fillStyle = "#3a4426";
+    for (let i = 0; i < 5; i++) { const a = i * 1.3 + e.seed; g.beginPath(); g.arc(R(Math.cos(a) * size * 0.6), R(Math.sin(a) * size * 0.6), R(0.16), 0, Math.PI * 2); g.fill(); }
+    g.fillStyle = "#c8d84a";
+    for (let i = 0; i < 6; i++) { const a = i * 1.05 + e.seed; g.beginPath(); g.arc(R(Math.cos(a) * size * 0.5), R(Math.sin(a) * size * 0.5 - 0.3), R(0.05), 0, Math.PI * 2); g.fill(); }
+  }
   if (e.kind === "prior") {
     // A pointed cowl and a tall staff crowned with a sickly light.
     g.fillStyle = "#1e1c26";
@@ -372,6 +391,13 @@ function drawEnemy(g: CanvasRenderingContext2D, e: Enemy, now: number): void {
   g.fillStyle = "rgba(190,210,120,0.85)";
   g.beginPath(); g.arc(R(-size * 0.2), R(-size * 0.75), R(0.04), 0, Math.PI * 2); g.arc(R(size * 0.2), R(-size * 0.75), R(0.04), 0, Math.PI * 2); g.fill();
   g.restore();
+
+  // Overhead health bar for wounded rank-and-file (bosses use the big HUD bar).
+  if (!e.boss && e.hp < e.maxHp) {
+    const bw = TILE * 0.7, bx = cx - bw / 2, by = cy - TILE * 0.62;
+    g.fillStyle = "rgba(0,0,0,0.6)"; g.fillRect(bx - 1, by - 1, bw + 2, 5);
+    g.fillStyle = "#8e2b23"; g.fillRect(bx, by, bw * Math.max(0, e.hp / e.maxHp), 3);
+  }
 }
 
 function drawGround(g: CanvasRenderingContext2D, gi: GroundItem, now: number): void {
@@ -381,6 +407,36 @@ function drawGround(g: CanvasRenderingContext2D, gi: GroundItem, now: number): v
   g.globalAlpha = pulse; g.drawImage(glow, cx - 12, cy - 12, 24, 24); g.globalAlpha = 1;
   g.fillStyle = "#d8b45a"; g.strokeStyle = "#2a2015"; g.lineWidth = 1;
   g.beginPath(); g.moveTo(cx, cy - 4); g.lineTo(cx + 4, cy); g.lineTo(cx, cy + 4); g.lineTo(cx - 4, cy); g.closePath(); g.fill(); g.stroke();
+}
+
+// Which role a settler figure shows, by index against the assigned counts.
+function settlerRole(world: World, i: number): "gatherer" | "forager" | "guard" | "idle" {
+  const r = world.settlement.roles;
+  if (i < r.gatherer) return "gatherer";
+  if (i < r.gatherer + r.forager) return "forager";
+  if (i < r.gatherer + r.forager + r.guard) return "guard";
+  return "idle";
+}
+const SETTLER_SKIN = ["#c99873", "#b98b6a", "#a97a52", "#d0a785"];
+
+/** The rescued, milling about inside the walls — names above, role-tinted. */
+function drawSettlers(g: CanvasRenderingContext2D, world: World, now: number): void {
+  const st = world.settlement, h = world.home;
+  const jacketOf: Record<string, string> = { gatherer: "#6b5236", forager: "#4f6a3a", guard: "#3c4650", idle: "#5a4636" };
+  for (let i = 0; i < st.population; i++) {
+    const col = i % 4, row = Math.floor(i / 4);
+    const bx = h.x + 4 + col * 3.2, by = h.y + h.h - 4 + row * 2.2;
+    const t = now / 1500 + i * 1.7;
+    const wx = bx + Math.cos(t) * 0.5, wy = by + Math.sin(t * 1.3) * 0.35;
+    const role = settlerRole(world, i);
+    const look = { skin: SETTLER_SKIN[i % SETTLER_SKIN.length]!, jacket: jacketOf[role]!, hood: "#3a3020", pack: "#4a3826" };
+    drawSurvivor(g, wx * TILE, wy * TILE, TILE * 0.8, Math.sin(t) * 0.6 + Math.PI / 2, look, { now, moving: true }, "fist");
+    const name = st.names[i] ?? "Survivor";
+    g.font = "600 10px Cinzel, serif"; g.textAlign = "center";
+    g.fillStyle = "rgba(0,0,0,0.7)"; g.fillText(name, wx * TILE + 1, (wy - 0.62) * TILE + 1);
+    g.fillStyle = "#d8cbb0"; g.fillText(name, wx * TILE, (wy - 0.62) * TILE);
+    g.textAlign = "left";
+  }
 }
 
 const ARMOR_TONE: Record<string, string> = { leather: "#6e4a2c", iron: "#8a9096", steel: "#b6bcc4" };
@@ -416,8 +472,33 @@ export function drawWorld(
     drawEnemy(g, e, now);
   }
 
+  if (world.zoneId === "home" && world.settlement.population > 0) drawSettlers(g, world, now);
+
   const p = world.player;
+
+  // Target reticle around the foe you're locked onto.
+  const ord = p.order;
+  if (ord.type === "attack") {
+    const tgt = world.enemies.find((e) => e.id === ord.enemyId && e.state !== "dead");
+    if (tgt) {
+      const rx = tgt.pos.x * TILE, ry = tgt.pos.y * TILE, rr2 = TILE * 0.62;
+      g.strokeStyle = "rgba(200,60,44,0.9)"; g.lineWidth = 2;
+      const t = now / 500;
+      for (let i = 0; i < 4; i++) {
+        const a = t + (i * Math.PI) / 2;
+        g.beginPath();
+        g.arc(rx, ry, rr2, a, a + 0.6);
+        g.stroke();
+      }
+    }
+  }
+
   if (p.alive) {
+    // Dodge i-frame flash: a pale ring while invulnerable.
+    if (world.clock < p.invulnUntil) {
+      g.strokeStyle = "rgba(180,210,235,0.7)"; g.lineWidth = 2.5;
+      g.beginPath(); g.arc(p.pos.x * TILE, p.pos.y * TILE, TILE * 0.5, 0, Math.PI * 2); g.stroke();
+    }
     const anim: AvatarAnim = { now, moving: p.path.length > 0 };
     const since = p.nextAttack - world.clock;
     if (since > 0) anim.swing = Math.min(1, Math.max(0, since / 240));
@@ -429,6 +510,12 @@ export function drawWorld(
 // --- Lighting (own layer so light reveals the world) ---
 let lightCanvas: HTMLCanvasElement | null = null;
 let lightCtx: CanvasRenderingContext2D | null = null;
+
+// Per-region colour grade — a subtle multiply wash so each place reads with its
+// own palette even before you notice the terrain. Home has no tint (neutral).
+const REGION_TINT: Record<string, string> = {
+  woods: "#b6cf9e", abbey: "#b2bccb", mire: "#c2c88c", barrows: "#a6afc6", heart: "#aec27e",
+};
 
 export function drawLighting(
   g: CanvasRenderingContext2D, world: World, cam: Camera,
@@ -471,6 +558,16 @@ export function drawLighting(
   }
   lc.globalCompositeOperation = "source-over";
   g.drawImage(lightCanvas, 0, 0);
+
+  const tint = REGION_TINT[world.zoneId];
+  if (tint) {
+    g.save();
+    g.globalCompositeOperation = "multiply";
+    g.globalAlpha = 0.5 + veil * 0.2;
+    g.fillStyle = tint;
+    g.fillRect(0, 0, viewW, viewH);
+    g.restore();
+  }
 
   g.save();
   g.globalCompositeOperation = "lighter";

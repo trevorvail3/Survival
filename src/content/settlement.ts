@@ -64,3 +64,10 @@ export const STRUCTURES: Record<StructureId, StructureDef> = {
 export function settlementCapacity(quartersLevel: number): number {
   return 2 + quartersLevel * 2;
 }
+
+/** A pool of plain, period names for rescued survivors. */
+export const SETTLER_NAMES: string[] = [
+  "Aldous", "Bryn", "Cecily", "Doran", "Edith", "Fenn", "Gerta", "Halin",
+  "Isolde", "Joss", "Kell", "Lisbet", "Merrick", "Nesta", "Osric", "Perrin",
+  "Quill", "Rowan", "Senna", "Tomas", "Ulric", "Vesna", "Wat", "Ysolt",
+];

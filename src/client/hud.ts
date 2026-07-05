@@ -8,7 +8,7 @@
  * are procedural (glyphs + item icons).
  */
 
-import type { Content, ItemId, SettlerRole, StructureId, World } from "../core/types.ts";
+import type { Content, InvSlot, ItemId, SettlerRole, StructureId, World } from "../core/types.ts";
 import { SETTLER_ROLES } from "../core/types.ts";
 import { glyph } from "./glyph.ts";
 import { itemIconSVG } from "./itemIcon.ts";
@@ -25,7 +25,19 @@ export interface HudHandlers {
   onAssign: (role: SettlerRole, delta: number) => void;
   onSkipTutorial: () => void;
   onSpendSkill: (nodeId: string) => void;
+  onStore: (packIndex: number) => void;
+  onTake: (stashIndex: number) => void;
+  onDodge: () => void;
+  onHotbar: (itemId: ItemId) => void;
+  onTogglePack: () => void;
+  onToggleSkills: () => void;
 }
+
+/** True on touch-primary devices (phones/tablets), where we surface on-screen
+ *  buttons for the actions that are otherwise keyboard/right-click only. */
+const TOUCH: boolean =
+  (typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches) ||
+  (typeof window !== "undefined" && "ontouchstart" in window);
 
 const ROLE_INFO: Record<SettlerRole, { name: string; glyph: string; effect: string }> = {
   gatherer: { name: "Gatherer", glyph: "anvil", effect: "Timber, stone & ore each dawn" },
@@ -47,12 +59,13 @@ export class Hud {
   private settle: HTMLElement;
   private travel: HTMLElement;
   private skillsP: HTMLElement;
+  private stashP: HTMLElement;
   private bossBar: HTMLElement;
   private tracker: HTMLElement;
   private tipEl: HTMLElement;
   private banner: HTMLElement;
   private audioBtn: HTMLButtonElement;
-  private mode: "none" | "pack" | "settle" | "travel" | "skills" = "none";
+  private mode: "none" | "pack" | "settle" | "travel" | "skills" | "stash" = "none";
   private near: NearStations = { forge: false, workshop: false };
   private log: string[] = [];
   private tipTimer = 0;
@@ -69,6 +82,7 @@ export class Hud {
     this.settle = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(520px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none" });
     this.travel = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(520px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none" });
     this.skillsP = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(780px,96vw)", maxHeight: "90vh", overflow: "auto", display: "none" });
+    this.stashP = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(680px,94vw)", maxHeight: "88vh", overflow: "auto", display: "none" });
 
     this.bossBar = this.floating({ left: "50%", top: "64px", transform: "translateX(-50%)", width: "min(440px,72vw)", display: "none", textAlign: "center" });
     this.tracker = this.panel({ left: "12px", top: "172px", maxWidth: "230px", display: "none" });
@@ -86,6 +100,30 @@ export class Hud {
     this.audioBtn.innerHTML = ico(audio.getMuted() ? "mute" : "sound");
     this.audioBtn.onclick = () => { audio.setMuted(!audio.getMuted()); this.audioBtn.innerHTML = ico(audio.getMuted() ? "mute" : "sound"); };
     root.appendChild(this.audioBtn);
+
+    if (TOUCH) this.buildTouchControls();
+  }
+
+  /** On touch devices, surface the actions that are otherwise keyboard/right-
+   *  click only: dodge, and the Pack / Skills panels. (Settlement, travel and
+   *  stash open by tapping their props in the world.) */
+  private buildTouchControls(): void {
+    const mk = (label: string, size: number, bottom: number, font: number, onTap: () => void): void => {
+      const b = document.createElement("button");
+      b.className = "act";
+      b.innerHTML = label;
+      Object.assign(b.style, {
+        position: "absolute", right: "16px", bottom: `${bottom}px`,
+        width: `${size}px`, height: `${size}px`, padding: "0", borderRadius: "50%",
+        fontSize: `${font}px`, lineHeight: "1", display: "flex",
+        alignItems: "center", justifyContent: "center", touchAction: "manipulation",
+      } as Partial<CSSStyleDeclaration>);
+      b.onclick = onTap;
+      this.root.appendChild(b);
+    };
+    mk("↺", 68, 92, 26, () => this.handlers.onDodge());       // dodge / roll (primary)
+    mk("▤", 48, 172, 20, () => this.handlers.onTogglePack());  // pack
+    mk("✦", 48, 226, 20, () => this.handlers.onToggleSkills()); // skills
   }
 
   private panel(style: Partial<CSSStyleDeclaration>): HTMLElement {
@@ -134,13 +172,25 @@ export class Hud {
     this.settle.style.display = this.mode === "settle" ? "block" : "none";
     this.travel.style.display = this.mode === "travel" ? "block" : "none";
     this.skillsP.style.display = this.mode === "skills" ? "block" : "none";
+    this.stashP.style.display = this.mode === "stash" ? "block" : "none";
   }
   togglePack(): void { this.mode = this.mode === "pack" ? "none" : "pack"; this.show(); }
   toggleSkills(): void { this.mode = this.mode === "skills" ? "none" : "skills"; this.show(); }
   openPack(): void { this.mode = "pack"; this.show(); }
   openSettlement(): void { this.mode = "settle"; this.show(); }
   openTravel(): void { this.mode = "travel"; this.show(); }
+  openStash(): void { this.mode = "stash"; this.show(); }
   closeAll(): void { this.mode = "none"; this.show(); }
+
+  /** Append a tap-target close control to a modal panel (touch has no [Esc]).
+   *  Uses insertAdjacentHTML so it never disturbs handlers already wired on the
+   *  panel's existing contents. */
+  private addClose(panel: HTMLElement): void {
+    panel.insertAdjacentHTML("beforeend",
+      `<button class="act closeX" aria-label="close" style="position:absolute;top:8px;right:8px;width:34px;height:34px;padding:0;border-radius:50%;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center">✕</button>`);
+    const x = panel.querySelector<HTMLButtonElement>(".closeX");
+    if (x) x.onclick = () => this.closeAll();
+  }
 
   showBanner(title: string, sub: string, hold = 2200): void {
     this.banner.innerHTML = `<h1>${title}</h1><p>${sub}</p>`;
@@ -201,12 +251,16 @@ export class Hud {
     this.hotbar.innerHTML = HOTBAR.map((id, i) => {
       const def = this.content.items[id]!;
       const qty = count(world, id);
-      return `<div class="hud-panel" style="width:50px;height:50px;padding:3px;position:relative;opacity:${qty > 0 ? 1 : 0.3}">
+      return `<div class="hud-panel" data-hotbar="${id}" style="width:50px;height:50px;padding:3px;position:relative;opacity:${qty > 0 ? 1 : 0.3};cursor:${qty > 0 ? "pointer" : "default"}">
         <div style="width:100%;height:100%">${itemIconSVG(def)}</div>
         <span style="position:absolute;top:1px;left:3px;font-size:10px;color:var(--ink-dim)">${i + 1}</span>
         <span style="position:absolute;bottom:1px;right:3px;font-size:11px;color:var(--ink)">${qty || ""}</span>
       </div>`;
     }).join("");
+    this.hotbar.querySelectorAll<HTMLElement>("[data-hotbar]").forEach((el) => {
+      const id = el.dataset["hotbar"] as ItemId;
+      if (count(world, id) > 0) el.onclick = () => this.handlers.onHotbar(id);
+    });
 
     this.logEl.innerHTML = `<div class="hud-heading">Log</div>` + (this.log.length ? this.log.map((m) => `<div>${m}</div>`).join("") : `<div style="opacity:.5">…</div>`);
 
@@ -226,6 +280,36 @@ export class Hud {
     else if (this.mode === "settle") this.renderSettlement(world);
     else if (this.mode === "travel") this.renderTravel(world);
     else if (this.mode === "skills") this.renderSkills(world);
+    else if (this.mode === "stash") this.renderStash(world);
+  }
+
+  private renderStash(world: World): void {
+    const cell = (s: InvSlot | null, kind: string, i: number): string => {
+      if (!s) return `<div class="slot empty"></div>`;
+      const def = this.content.items[s.id]!;
+      return `<div class="slot" data-${kind}="${i}" title="${def.name} — ${def.desc}"><div class="ic">${itemIconSVG(def)}</div>${s.qty > 1 ? `<span class="q">${s.qty}</span>` : ""}</div>`;
+    };
+    const pack = world.player.inv.map((s, i) => cell(s, "store", i)).join("");
+    const stash = world.stash.map((s, i) => cell(s, "take", i)).join("");
+    this.stashP.innerHTML =
+      `<style>
+        #hud-stash .grid{display:grid;gap:5px;margin-bottom:12px}
+        #hud-stash .pk{grid-template-columns:repeat(6,1fr)}
+        #hud-stash .sk{grid-template-columns:repeat(8,1fr)}
+        #hud-stash .slot{aspect-ratio:1;background:#101112;border:1px solid #26282a;border-radius:3px;position:relative;cursor:pointer}
+        #hud-stash .slot.empty{opacity:.4;cursor:default}#hud-stash .slot .ic{width:100%;height:100%;padding:3px}
+        #hud-stash .slot .q{position:absolute;bottom:1px;right:3px;font-size:11px}
+      </style>
+      <div id="hud-stash">
+        <div class="hud-heading">Your Pack <span style="color:var(--ink-dim);text-transform:none;letter-spacing:0">— click to store ▸</span></div>
+        <div class="grid pk">${pack}</div>
+        <div class="hud-heading">Storage <span style="color:var(--ink-dim);text-transform:none;letter-spacing:0">— click to take ◂ · safe if you fall</span></div>
+        <div class="grid sk">${stash}</div>
+        <div style="text-align:center;margin-top:8px;font-size:12px;color:var(--ink-dim)">Bank your gains here before a dangerous run. [Esc] close</div>
+      </div>`;
+    this.stashP.querySelectorAll<HTMLElement>(".slot[data-store]").forEach((el) => { el.onclick = () => this.handlers.onStore(Number(el.dataset["store"])); });
+    this.stashP.querySelectorAll<HTMLElement>(".slot[data-take]").forEach((el) => { el.onclick = () => this.handlers.onTake(Number(el.dataset["take"])); });
+    this.addClose(this.stashP);
   }
 
   private renderSkills(world: World): void {
@@ -274,6 +358,7 @@ export class Hud {
     this.skillsP.querySelectorAll<SVGGElement>("g[data-skill]").forEach((el) => {
       el.onclick = () => this.handlers.onSpendSkill(el.dataset["skill"]!);
     });
+    this.addClose(this.skillsP);
   }
 
   private renderTravel(world: World): void {
@@ -291,13 +376,21 @@ export class Hud {
     const pins = this.content.regions.map((r) => {
       const px = r.mx * W, py = r.my * H;
       const here = world.zoneId === r.id;
-      const dcol = r.danger >= 3 ? "#c23b2c" : r.danger === 2 ? "#c8922e" : "#7f9a3c";
+      const locked = !!r.requires && !r.requires.every((k) => world.bossesSlain.includes(k));
+      const cleansed = !!r.final && world.won;
+      const dcol = r.danger >= 4 ? "#a24bd6" : r.danger === 3 ? "#c23b2c" : r.danger === 2 ? "#c8922e" : "#7f9a3c";
       const labelLeft = r.mx < 0.5;
-      return `<g data-travel="${r.id}" style="cursor:pointer">
-        <title>${r.name} — ${r.blurb}${r.boss ? " · a boss guards it" : ""}</title>
-        <circle cx="${px}" cy="${py}" r="${here ? 11 : 9}" fill="${here ? "#c8922e" : "#2a2620"}" stroke="${here ? "#fff2cf" : dcol}" stroke-width="2.5"/>
-        <text x="${labelLeft ? px + 15 : px - 15}" y="${py - 2}" text-anchor="${labelLeft ? "start" : "end"}" font-size="13" font-family="Cinzel, serif" fill="#e6dcc4">${r.name}</text>
-        <text x="${labelLeft ? px + 15 : px - 15}" y="${py + 13}" text-anchor="${labelLeft ? "start" : "end"}" font-size="11" fill="${dcol}">${skulls(r.danger)}${here ? "  · here" : ""}</text>
+      const anchor = labelLeft ? "start" : "end";
+      const lx = labelLeft ? px + 15 : px - 15;
+      const fill = locked ? "#1a1712" : here ? "#c8922e" : "#2a2620";
+      const stroke = cleansed ? "#e6b24e" : locked ? "#4a4030" : here ? "#fff2cf" : dcol;
+      const sub = locked ? `<tspan fill="#7a6b4a">sealed</tspan>` : cleansed ? `<tspan fill="#e6b24e">cleansed</tspan>` : `<tspan fill="${dcol}">${skulls(r.danger)}</tspan>${here ? " · here" : ""}`;
+      return `<g data-travel="${r.id}" style="cursor:pointer;opacity:${locked ? 0.7 : 1}">
+        <title>${r.name} — ${locked ? "Slay both the Barrow King and the Pale Prior to unlock." : r.blurb}</title>
+        <circle cx="${px}" cy="${py}" r="${here ? 11 : 9}" fill="${fill}" stroke="${stroke}" stroke-width="2.5"/>
+        ${locked ? `<text x="${px}" y="${py + 4}" text-anchor="middle" font-size="11" fill="#c8922e">🔒</text>` : ""}
+        <text x="${lx}" y="${py - 2}" text-anchor="${anchor}" font-size="13" font-family="Cinzel, serif" fill="#e6dcc4">${r.name}</text>
+        <text x="${lx}" y="${py + 13}" text-anchor="${anchor}" font-size="11">${sub}</text>
       </g>`;
     }).join("");
 
@@ -317,6 +410,7 @@ export class Hud {
     this.travel.querySelectorAll<SVGGElement>("g[data-travel]").forEach((el) => {
       el.onclick = () => this.handlers.onTravel(el.dataset["travel"]!);
     });
+    this.addClose(this.travel);
   }
 
   private renderPack(world: World): void {
@@ -373,6 +467,7 @@ export class Hud {
       const btn = el.querySelector("button");
       if (btn && !btn.hasAttribute("disabled")) btn.onclick = () => this.handlers.onCraft(el.dataset["recipe"]!);
     });
+    this.addClose(this.pack);
   }
 
   private renderSettlement(world: World): void {
@@ -426,6 +521,7 @@ export class Hud {
     this.settle.querySelectorAll<HTMLElement>("button.rbtn").forEach((el) => {
       if (!el.hasAttribute("disabled")) el.onclick = () => this.handlers.onAssign(el.dataset["role"] as SettlerRole, Number(el.dataset["delta"]));
     });
+    this.addClose(this.settle);
   }
 }
 

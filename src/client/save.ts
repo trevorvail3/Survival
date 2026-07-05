@@ -34,6 +34,16 @@ export function loadGame(): { seed: number; world: World } | null {
     if (!raw) return null;
     const blob = JSON.parse(raw) as Partial<SaveBlob>;
     if (blob.v !== SAVE_VERSION || !blob.world || typeof blob.seed !== "number") return null;
+    // Backfill fields added after this save version so older runs keep working.
+    const pl = blob.world.player as unknown as Record<string, unknown>;
+    if (typeof pl["invulnUntil"] !== "number") {
+      pl["invulnUntil"] = 0; pl["dashUntil"] = 0; pl["dashReadyAt"] = 0; pl["dashDir"] = { x: 1, y: 0 };
+    }
+    const w = blob.world as unknown as Record<string, unknown>;
+    if (typeof w["won"] !== "boolean") w["won"] = false;
+    if (!Array.isArray(w["stash"])) w["stash"] = new Array(48).fill(null);
+    const st = blob.world.settlement as unknown as Record<string, unknown>;
+    if (st && !Array.isArray(st["names"])) st["names"] = [];
     return { seed: blob.seed, world: blob.world };
   } catch {
     return null;

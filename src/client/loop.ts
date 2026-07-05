@@ -13,6 +13,7 @@ import {
   assignRole,
   build,
   craft,
+  dodge,
   isStation,
   orderAttack,
   orderInteract,
@@ -20,18 +21,21 @@ import {
   playerMods,
   restAtHearth,
   spendSkill,
+  storeToStash,
+  takeFromStash,
   throwFirepot,
   tick,
   travelTo,
   useSlot,
   type GameEvent,
 } from "../core/world.ts";
+import { isNight } from "../core/world.ts";
 import { drawLighting, drawWorld, TILE, type Camera } from "./render.ts";
 import { Fx } from "./fx.ts";
 import { Input } from "./input.ts";
 import { Hud, HOTBAR } from "./hud.ts";
-import { audio } from "./audio.ts";
-import { clearSave, saveGame } from "./save.ts";
+import { audio, type SceneKey } from "./audio.ts";
+import { saveGame } from "./save.ts";
 import { Tutorial } from "./onboarding.ts";
 
 export class Game {
@@ -99,6 +103,13 @@ export class Game {
     const click = this.input.consumeClick();
     if (click && p.alive && !this.hud.isModalOpen) this.handleClick(click.x, click.y);
 
+    // Dodge: Space or right-click, rolling toward the cursor.
+    const wantDodge = this.input.consumeRight() || this.input.pressed(" ");
+    if (wantDodge && p.alive && !this.hud.isModalOpen) {
+      const aim = this.screenToWorld(this.input.mouseX, this.input.mouseY);
+      dodge(this.world, aim.x, aim.y, this.events);
+    }
+
     for (let i = 0; i < HOTBAR.length; i++) {
       if (this.input.pressed(String(i + 1))) this.useHotbar(HOTBAR[i]!, now);
     }
@@ -114,6 +125,7 @@ export class Game {
         if (pr.kind === "hearth") { restAtHearth(world, this.content, this.rng, this.events); this.dispatch(this.events, now); this.events.length = 0; }
         else if (pr.kind === "townboard") { this.hud.openSettlement(); this.tut("board"); }
         else if (pr.kind === "waystone" || pr.kind === "maptable") this.hud.openTravel();
+        else if (pr.kind === "stash") this.hud.openStash();
         else if (pr.kind === "forge" || pr.kind === "workbench") { this.hud.openPack(); this.tut("pack"); }
       }
       this.pendingStation = null;
@@ -130,6 +142,9 @@ export class Game {
 
     // --- Low-HP heartbeat ---
     if (p.alive && p.hp / p.maxHp < 0.3 && now > this.nextHeartbeat) { audio.play("lowhp"); this.nextHeartbeat = now + 1100; }
+
+    // --- Boss battle music while a boss hunts ---
+    audio.setBossMusic(world.enemies.some((en) => en.boss && (en.state === "hunt" || en.state === "attack")));
 
     // --- Camera ---
     const tx = p.pos.x * TILE - this.viewW / this.zoom / 2, ty = p.pos.y * TILE - this.viewH / this.zoom / 2;
@@ -216,7 +231,7 @@ export class Game {
     const LABELS: Partial<Record<string, string>> = {
       chest: "Search chest", crate: "Search crate", barrel: "Search barrel", remains: "Search remains", cart: "Search wreck",
       tree: "Fell timber", rock: "Mine stone", herbs: "Gather herbs", survivor: "Rescue survivor",
-      forge: "Work the forge", workbench: "Use the workshop", hearth: "Rest until dawn", townboard: "Muster the settlement", waystone: "Read the waystone", maptable: "Study the war map",
+      forge: "Work the forge", workbench: "Use the workshop", hearth: "Rest until dawn", townboard: "Muster the settlement", waystone: "Read the waystone", maptable: "Study the war map", stash: "Open storage",
     };
     const CONSUMED = new Set(["chest", "crate", "barrel", "remains", "cart", "survivor", "tree", "rock", "herbs"]);
     let pd = 0.8; let label: string | null = null;
@@ -252,12 +267,26 @@ export class Game {
       onUseSlot: (i: number) => { const ev: GameEvent[] = []; useSlot(this.world, this.content, i, ev); this.dispatch(ev, performance.now()); },
       onSkipTutorial: () => { this.tutorial.skip(); this.hud.setTask(null); },
       onSpendSkill: (nodeId: string) => { spendSkill(this.world, nodeId); },
+      onStore: (i: number) => { storeToStash(this.world, this.content, i); },
+      onTake: (i: number) => { takeFromStash(this.world, this.content, i); },
+      onDodge: () => {
+        const p = this.world.player;
+        if (!p.alive || this.hud.isModalOpen) return;
+        const aim = this.screenToWorld(this.input.mouseX, this.input.mouseY);
+        const ev: GameEvent[] = [];
+        dodge(this.world, aim.x, aim.y, ev);
+        this.dispatch(ev, performance.now());
+      },
+      onHotbar: (id: ItemId) => { this.useHotbar(id, performance.now()); },
+      onTogglePack: () => { this.hud.togglePack(); audio.play("click"); this.tut("pack"); },
+      onToggleSkills: () => { this.hud.toggleSkills(); audio.play("click"); },
       onTravel: (regionId: string) => {
         const ev: GameEvent[] = [];
         if (travelTo(this.world, this.content, this.rng, regionId, ev)) {
           this.tut("travel");
           this.hud.closeAll();
           this.snapCamera();
+          audio.setScene(regionId === "home" ? (isNight(this.world.timeOfDay) ? "night" : "day") : (regionId as SceneKey));
           const name = regionId === "home" ? "Your Settlement" : (this.content.regions.find((r) => r.id === regionId)?.name ?? "the wilds");
           this.hud.showBanner(name, regionId === "home" ? "Home again." : "Watch the light.", 1800);
           this.dispatch(ev, performance.now());
@@ -278,6 +307,7 @@ export class Game {
       switch (e.t) {
         case "melee": audio.play("melee"); break;
         case "bowshot": audio.play("bowshot"); this.fx.muzzle(p.pos.x, p.pos.y, p.facing); break;
+        case "dodge": audio.play("dodge"); this.fx.sparks(e.x, e.y, "#b8c2cc", 5); break;
         case "noammo": audio.play("dryfire"); this.hud.pushLog("Out of arrows."); break;
         case "hit": audio.play(e.crit ? "crit" : "hit"); this.fx.blood(e.x, e.y, e.crit ? 16 : 9); this.fx.float(e.x, e.y - 0.4, String(e.dmg), e.crit ? "#ff6a4a" : "#e8d8b0", e.crit ? 17 : 13); break;
         case "throw": audio.play("throw"); break;
@@ -292,14 +322,20 @@ export class Game {
         case "build": audio.play("build"); this.hud.pushLog(`${this.content.structures[e.id].name} raised to level ${e.level}.`); this.hud.showBanner(this.content.structures[e.id].name, `Level ${e.level}`, 1500); break;
         case "recruit": audio.play("recruit"); this.tut("rescue"); break;
         case "levelUp": audio.play("levelup"); this.hud.showBanner(`Level ${e.level}`, "A skill point earned — press C.", 2000); this.hud.pushLog(`You reach level ${e.level}.`); break;
+        case "victory": audio.play("levelup"); audio.play("daybreak"); this.hud.showBanner("The Vale is Cleansed", "The Rot-Mother is dead. The plague ends with you.", 6000); this.hud.pushLog("You have won. The Vale is free — range on if you wish."); break;
         case "heal": audio.play("heal"); break;
         case "eat": audio.play("eat"); break;
         case "drink": audio.play("drink"); break;
         case "cure": audio.play("heal"); this.hud.pushLog("The fever recedes."); break;
         case "equip": audio.play("equip"); break;
-        case "dayBreak": audio.play("daybreak"); audio.setScene("day"); this.hud.showBanner(`Day ${e.day}`, "You saw the dawn.", 2200); break;
-        case "nightFall": audio.play("nightfall"); audio.setScene("night"); this.hud.showBanner("Nightfall", "The dead walk. Hold your walls.", 2200); this.tut("night"); break;
-        case "death": audio.play("death"); audio.setScene("day"); clearSave(); this.hud.showDeath(this.world.day); break;
+        case "dayBreak": audio.play("daybreak"); if (this.world.zoneId === "home") audio.setScene("day"); this.hud.showBanner(`Day ${e.day}`, "You saw the dawn.", 2200); break;
+        case "nightFall": audio.play("nightfall"); if (this.world.zoneId === "home") audio.setScene("night"); this.hud.showBanner("Nightfall", "The dead walk. Hold your walls.", 2200); this.tut("night"); break;
+        case "downed":
+          audio.play("death"); audio.setScene("day"); audio.setBossMusic(false);
+          this.snapCamera();
+          this.hud.showBanner("Dragged Back", e.dropped > 0 ? `You fell — your pack is lost in the wilds. You wake at the hearth.` : "You fell, and wake at the hearth.", 3200);
+          this.hud.pushLog("You were dragged home. Your carried pack is lost.");
+          break;
         case "log": this.hud.pushLog(e.msg); break;
       }
     }
