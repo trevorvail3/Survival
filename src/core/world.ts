@@ -159,12 +159,23 @@ export function addItem(player: Player, content: Content, id: ItemId, qty: numbe
   return addStack(player.inv, def, id, qty);
 }
 
+/** True for gear instances — unique, never stack, carry Power/rarity. */
+function isGearSlot(content: Content, s: InvSlot): boolean {
+  const def = content.items[s.id];
+  return s.power !== undefined || def?.slot === "body" || !!def?.weapon;
+}
+
 /** Deposit a pack slot into the settlement stash. */
 export function storeToStash(world: World, content: Content, packIndex: number): void {
   const s = world.player.inv[packIndex];
   if (!s) return;
   const def = content.items[s.id];
   if (!def) return;
+  if (isGearSlot(content, s)) { // move the instance intact
+    const j = world.stash.findIndex((x) => !x);
+    if (j >= 0) { world.stash[j] = { ...s }; world.player.inv[packIndex] = null; }
+    return;
+  }
   const left = addStack(world.stash, def, s.id, s.qty);
   if (left <= 0) world.player.inv[packIndex] = null;
   else s.qty = left;
@@ -176,6 +187,11 @@ export function takeFromStash(world: World, content: Content, stashIndex: number
   if (!s) return;
   const def = content.items[s.id];
   if (!def) return;
+  if (isGearSlot(content, s)) {
+    const j = world.player.inv.findIndex((x) => !x);
+    if (j >= 0) { world.player.inv[j] = { ...s }; world.stash[stashIndex] = null; }
+    return;
+  }
   const left = addStack(world.player.inv, def, s.id, s.qty);
   if (left <= 0) world.stash[stashIndex] = null;
   else s.qty = left;
@@ -1026,10 +1042,19 @@ export function tick(world: World, content: Content, ctx: { now: number; rng: ()
   // Auto-pickup ground loot.
   for (const g of world.ground) {
     if (Math.hypot(g.pos.x - p.pos.x, g.pos.y - p.pos.y) < 0.6) {
-      const left = addItem(p, content, g.item.id, g.item.qty);
-      const got = g.item.qty - left;
-      if (got > 0) out.push({ t: "pickup", id: g.item.id, qty: got });
-      g.item.qty = left;
+      const def = content.items[g.item.id];
+      const isGear = g.item.power !== undefined || def?.slot === "body" || !!def?.weapon;
+      if (isGear) {
+        // Gear is a unique instance — keep its Power/rarity, never stack it.
+        // Only collect if there's a free slot, else leave it to grab later.
+        const slot = p.inv.findIndex((s) => !s);
+        if (slot >= 0) { p.inv[slot] = { ...g.item }; out.push({ t: "pickup", id: g.item.id, qty: 1 }); g.item.qty = 0; }
+      } else {
+        const left = addItem(p, content, g.item.id, g.item.qty);
+        const got = g.item.qty - left;
+        if (got > 0) out.push({ t: "pickup", id: g.item.id, qty: got });
+        g.item.qty = left;
+      }
     }
   }
   world.ground = world.ground.filter((g) => g.item.qty > 0);
