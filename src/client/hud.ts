@@ -437,7 +437,7 @@ export class Hud {
     </g>`;
 
     this.travel.innerHTML =
-      `<div class="hud-heading" style="text-align:center">The Vale — ${atHome ? "choose an expedition" : "return, or press on"}</div>` +
+      `<div class="hud-heading" style="text-align:center">The Hold — ${atHome ? "choose an expedition" : "return, or press on"}</div>` +
       `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;background:radial-gradient(circle at 50% 45%, #2a2418, #1a160e);border:1px solid #4a3d2c;border-radius:4px" xmlns="http://www.w3.org/2000/svg">${roads}${home}${pins}</svg>` +
       `<div style="text-align:center;margin-top:8px;font-size:12px;color:var(--ink-dim)">Time passes on the road — be home before the light fails. [Esc] close</div>`;
 

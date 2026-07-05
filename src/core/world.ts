@@ -395,7 +395,7 @@ export function travelTo(world: World, content: Content, rng: () => number, targ
     const def = regionById(targetId);
     if (!def) return false;
     if (def.requires && !def.requires.every((k) => world.bossesSlain.includes(k))) {
-      out.push({ t: "log", msg: "The way is sealed until the Vale's wardens have fallen." });
+      out.push({ t: "log", msg: "The way is sealed until the Hold's wardens have fallen." });
       return false;
     }
     const layout = generateRegion(rng, def);

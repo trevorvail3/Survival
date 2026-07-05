@@ -39,6 +39,13 @@ import { audio, type SceneKey } from "./audio.ts";
 import { saveGame } from "./save.ts";
 import { Tutorial } from "./onboarding.ts";
 
+// Elden-Ring-style titles, hailed the first time a boss turns on you in a region.
+const BOSS_EPITHET: Partial<Record<string, string>> = {
+  prior: "Keeper of the Cold Vigil",
+  graveking: "Sovereign of the Iron Dead",
+  rotmother: "Firstborn of the Plague",
+};
+
 export class Game {
   private g: CanvasRenderingContext2D;
   private cam: Camera = { x: 0, y: 0 };
@@ -48,6 +55,7 @@ export class Game {
   private last = 0;
   private raf = 0;
   private bankTipShown = false;
+  private bossHailed = new Set<string>();
   private shake = 0;
   private nextHeartbeat = 0;
   private events: GameEvent[] = [];
@@ -287,6 +295,7 @@ export class Game {
         const ev: GameEvent[] = [];
         if (travelTo(this.world, this.content, this.rng, regionId, ev)) {
           this.tut("travel");
+          this.bossHailed.clear(); // a fresh region — its lord may be hailed again
           this.hud.closeAll();
           this.snapCamera();
           audio.setScene(regionId === "home" ? (isNight(this.world.timeOfDay) ? "night" : "day") : (regionId as SceneKey));
@@ -322,7 +331,13 @@ export class Game {
         case "throw": audio.play("throw"); break;
         case "explode": audio.play("explode"); this.fx.explosion(e.x, e.y); this.shake = Math.max(this.shake, 14); break;
         case "kill": audio.creature(e.kind, "die"); this.fx.blood(e.x, e.y, 22); break;
-        case "aggro": audio.creature(e.kind, "aggro"); audio.sting(); break;
+        case "aggro":
+          audio.creature(e.kind, "aggro"); audio.sting();
+          if (BOSS_EPITHET[e.kind] && !this.bossHailed.has(e.kind)) {
+            this.bossHailed.add(e.kind);
+            this.hud.showBanner(this.content.enemies[e.kind].name, BOSS_EPITHET[e.kind]!, 3400);
+          }
+          break;
         case "playerHurt": audio.play("hurt"); this.fx.float(p.pos.x, p.pos.y - 0.6, `-${e.dmg}`, "#ff4a3a", 15); this.fx.blood(p.pos.x, p.pos.y, 6); this.shake = Math.max(this.shake, 6 + e.dmg * 0.2); this.tut("hurt"); break;
         case "pickup": audio.play("pickup"); this.hud.pushLog(`+${e.qty} ${this.content.items[e.id]?.name ?? e.id}`); break;
         case "gather": audio.play("gather"); this.tut("gather"); break;
@@ -332,7 +347,7 @@ export class Game {
         case "recruit": audio.play("recruit"); this.tut("rescue"); break;
         case "levelUp": audio.play("levelup"); this.hud.showBanner(`Level ${e.level}`, "A skill point earned — press C.", 2000); this.hud.pushLog(`You reach level ${e.level}.`); break;
         case "skillup": { const m = SKILL_META[e.skill as SkillId]; audio.play("click"); this.hud.tip(`<b>${m?.name ?? e.skill}</b> level ${e.level}`); this.hud.pushLog(`${m?.name ?? e.skill} advanced to ${e.level}.`); break; }
-        case "victory": audio.play("levelup"); audio.play("daybreak"); this.hud.showBanner("The Vale is Cleansed", "The Rot-Mother is dead. The plague ends with you.", 6000); this.hud.pushLog("You have won. The Vale is free — range on if you wish."); break;
+        case "victory": audio.play("levelup"); audio.play("daybreak"); this.hud.showBanner("The Hold is Cleansed", "The Rot-Mother is dead. The plague ends with you.", 6000); this.hud.pushLog("You have won. The Hold is free — range on if you wish."); break;
         case "heal": audio.play("heal"); break;
         case "eat": audio.play("eat"); break;
         case "drink": audio.play("drink"); break;
