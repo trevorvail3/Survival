@@ -1,0 +1,17 @@
+{
+  "name": "ashfall",
+  "version": "0.1.0",
+  "description": "Ashfall - a dark, top-down survival-horror crafting game. No image or audio assets: everything is generated in code.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}
