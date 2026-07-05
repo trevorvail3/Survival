@@ -89,6 +89,10 @@ export interface ItemDef {
   throwDamage?: number;
   throwRadius?: number;
   fire?: boolean;
+  /** Trainable skill required to wield/wear this (SkillId), e.g. "attack". */
+  reqSkill?: string;
+  /** Minimum level in `reqSkill` to equip. */
+  reqLevel?: number;
   desc: string;
 }
 

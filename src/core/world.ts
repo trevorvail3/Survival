@@ -35,7 +35,7 @@ import { settlementCapacity, SETTLER_NAMES } from "../content/settlement.ts";
 import { pick } from "./rng.ts";
 import { computeMods, nodeUnlocked, SKILLS, xpForNext } from "../content/skills.ts";
 import type { Mods } from "../content/skills.ts";
-import { levelForXp } from "../content/trainskills.ts";
+import { levelForXp, SKILL_META } from "../content/trainskills.ts";
 import type { SkillId } from "../content/trainskills.ts";
 
 export const PLAYER_RADIUS = 0.34;
@@ -65,6 +65,7 @@ export type GameEvent =
   | { t: "dodge"; x: number; y: number }
   | { t: "noammo" }
   | { t: "hit"; x: number; y: number; dmg: number; crit: boolean }
+  | { t: "miss"; x: number; y: number }
   | { t: "throw" }
   | { t: "explode"; x: number; y: number }
   | { t: "kill"; kind: EnemyKind; x: number; y: number }
@@ -198,6 +199,9 @@ export function removeItem(player: Player, id: ItemId, qty: number): boolean {
 
 const BASE_HP = 100;
 const HP_PER_LEVEL = 5;
+const HP_PER_HITPOINT = 4; // each Hitpoints level over 1 adds this to max HP
+
+const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
 
 export function playerMods(player: Player): Mods {
   return computeMods(player.skills);
@@ -205,7 +209,8 @@ export function playerMods(player: Player): Mods {
 
 function recomputeMaxHp(player: Player): void {
   const old = player.maxHp;
-  player.maxHp = BASE_HP + (player.level - 1) * HP_PER_LEVEL + playerMods(player).maxHpBonus;
+  const hpLvl = levelForXp(player.trained["hitpoints"] ?? 0);
+  player.maxHp = BASE_HP + (player.level - 1) * HP_PER_LEVEL + (hpLvl - 1) * HP_PER_HITPOINT + playerMods(player).maxHpBonus;
   if (player.maxHp > old) player.hp += player.maxHp - old; // gains apply to current HP too
   if (player.hp > player.maxHp) player.hp = player.maxHp;
 }
@@ -236,7 +241,10 @@ export function grantSkillXp(world: World, id: SkillId, amount: number, out: Gam
   const before = levelForXp(p.trained[id] ?? 0);
   p.trained[id] = (p.trained[id] ?? 0) + Math.round(amount);
   const after = levelForXp(p.trained[id]!);
-  if (after > before) out.push({ t: "skillup", skill: id, level: after });
+  if (after > before) {
+    if (id === "hitpoints") recomputeMaxHp(p); // a tougher body, more life
+    out.push({ t: "skillup", skill: id, level: after });
+  }
 }
 
 /** Award combat XP for a kill, split by the style used (weapon kind). */
@@ -575,9 +583,18 @@ function attackTarget(world: World, content: Content, ctx: { rng: () => number }
   }
   const eDef = content.enemies[e.kind];
   const m = playerMods(p);
+  const ranged = wep.kind === "bow";
+  // Accuracy: your combat level in this style vs the foe's armour. Never a
+  // sure thing, never hopeless — OSRS-style roll, so misses happen.
+  const acc = ranged ? skillLevel(world, "ranged") : skillLevel(world, "attack");
+  const hitChance = clamp((acc + 10) / (acc + 10 + eDef.armor * 1.6), 0.4, 0.97);
+  if (ctx.rng() > hitChance) { out.push({ t: "miss", x: e.pos.x, y: e.pos.y }); return; }
+  // Power: Strength drives melee max hit, Ranged drives the bow.
+  const powLvl = ranged ? skillLevel(world, "ranged") : skillLevel(world, "strength");
+  const powMult = 1 + powLvl * 0.028; // level 50 ~ +140%
   const crit = ctx.rng() < m.critChance;
   const berserk = p.hp / p.maxHp < 0.4 ? 1 + m.lowHpDmg : 1; // Berserker
-  let dmg = Math.round(wep.damage * m.meleeMult * berserk * (0.85 + ctx.rng() * 0.3) * (crit ? 1.8 : 1));
+  let dmg = Math.round(wep.damage * m.meleeMult * powMult * berserk * (0.85 + ctx.rng() * 0.3) * (crit ? 1.8 : 1));
   dmg = Math.max(1, dmg - Math.max(0, eDef.armor - m.armorPen));
   damageEnemy(world, content, ctx, e, dmg, crit, out);
   // Knockback + brief stagger on solid hits.
@@ -626,8 +643,12 @@ function attackPlayer(world: World, content: Content, e: Enemy, out: GameEvent[]
   const p = world.player;
   if (world.clock < p.invulnUntil) return; // dodged — no damage
   const eDef = content.enemies[e.kind];
+  const defL = skillLevel(world, "defence");
+  // Defence turns some blows aside outright (capped), and softens the rest.
+  if (Math.random() < clamp(defL * 0.006, 0, 0.35)) { out.push({ t: "miss", x: p.pos.x, y: p.pos.y }); return; }
   const armorVal = p.armor ? content.items[p.armor]?.armor ?? 0 : 0;
-  const dmg = Math.max(1, Math.round(eDef.damage * (0.9 + Math.random() * 0.2)) - armorVal - playerMods(p).dmgReduce);
+  const defSoak = Math.floor(defL * 0.35);
+  const dmg = Math.max(1, Math.round(eDef.damage * (0.9 + Math.random() * 0.2)) - armorVal - defSoak - playerMods(p).dmgReduce);
   p.hp -= dmg;
   out.push({ t: "playerHurt", dmg });
   const infect = (e.kind === "revenant" ? 8 : e.kind === "wretch" ? 12 : e.boss ? 10 : 6) * playerMods(p).infectionMult;
@@ -759,6 +780,11 @@ export function useSlot(world: World, content: Content, slotIndex: number, out: 
       if (def.heal) p.hp = Math.min(p.maxHp, p.hp + def.heal * heal);
       removeItem(p, slot.id, 1); out.push({ t: "cure" }); break;
     case "equip":
+      if (def.reqLevel && def.reqSkill && skillLevel(world, def.reqSkill as SkillId) < def.reqLevel) {
+        const sk = SKILL_META[def.reqSkill as SkillId]?.name ?? def.reqSkill;
+        out.push({ t: "log", msg: `You need ${sk} ${def.reqLevel} to use the ${def.name}.` });
+        break;
+      }
       if (def.slot === "body") p.armor = def.id;
       else p.equipped = def.id;
       out.push({ t: "equip" });

@@ -311,6 +311,7 @@ export class Game {
         case "dodge": audio.play("dodge"); this.fx.sparks(e.x, e.y, "#b8c2cc", 5); break;
         case "noammo": audio.play("dryfire"); this.hud.pushLog("Out of arrows."); break;
         case "hit": audio.play(e.crit ? "crit" : "hit"); this.fx.blood(e.x, e.y, e.crit ? 16 : 9); this.fx.float(e.x, e.y - 0.4, String(e.dmg), e.crit ? "#ff6a4a" : "#e8d8b0", e.crit ? 17 : 13); break;
+        case "miss": this.fx.float(e.x, e.y - 0.4, "miss", "#7d858c", 11); break;
         case "throw": audio.play("throw"); break;
         case "explode": audio.play("explode"); this.fx.explosion(e.x, e.y); this.shake = Math.max(this.shake, 14); break;
         case "kill": audio.creature(e.kind, "die"); this.fx.blood(e.x, e.y, 22); break;
