@@ -40,6 +40,8 @@ const handlers: HudHandlers = {
   onAssign: (role, delta) => gameHandlers?.onAssign(role, delta),
   onSkipTutorial: () => gameHandlers?.onSkipTutorial(),
   onSpendSkill: (id) => gameHandlers?.onSpendSkill(id),
+  onStore: (i) => gameHandlers?.onStore(i),
+  onTake: (i) => gameHandlers?.onTake(i),
 };
 const hud = new Hud(hudRoot, content, handlers);
 

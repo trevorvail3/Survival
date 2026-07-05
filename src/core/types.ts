@@ -183,6 +183,7 @@ export type PropKind =
   | "survivor" // rescuable settlement member
   | "waystone" // return stone in the wilds (opens the map)
   | "maptable" // the war map in the settlement (choose an expedition)
+  | "stash" // settlement storage chest
   | "gate"; // openable
 
 export interface Prop {
@@ -215,7 +216,7 @@ export interface Player {
   /** Tiles remaining to walk (drives movement + facing). */
   path: Vec2[];
   order: PlayerOrder;
-  inv: (InvSlot | null)[];
+  inv: (InvSlot | null)[]; // the pack you carry (lost if you fall)
   equipped: ItemId | null; // weapon
   armor: ItemId | null; // body armour
   nextAttack: number;
@@ -312,6 +313,8 @@ export interface World {
   ground: GroundItem[];
   props: Prop[];
   settlement: Settlement;
+  /** The settlement storage chest — safe from death, unlike your pack. */
+  stash: (InvSlot | null)[];
   /** Rect of the home settlement (safe zone); night spawns avoid it. Only
    *  meaningful while `zoneId === "home"`. */
   home: { x: number; y: number; w: number; h: number };

@@ -16,6 +16,7 @@ import type {
   Enemy,
   EnemyKind,
   InvSlot,
+  ItemDef,
   ItemId,
   Player,
   Prop,
@@ -37,6 +38,7 @@ export const PLAYER_RADIUS = 0.34;
 export const INV_COLS = 6;
 export const INV_ROWS = 5;
 export const INV_SIZE = INV_COLS * INV_ROWS;
+export const STASH_SIZE = 48;
 export const WALK_SPEED = 3.4; // tiles/sec
 const RESOURCE_RESPAWN_MS = 45_000;
 
@@ -79,7 +81,7 @@ export type GameEvent =
   | { t: "equip" }
   | { t: "dayBreak"; day: number }
   | { t: "nightFall"; day: number }
-  | { t: "death" }
+  | { t: "downed"; dropped: number }
   | { t: "log"; msg: string };
 
 // ---------------------------------------------------------------------------
@@ -122,11 +124,10 @@ export function countItem(player: Player, id: ItemId): number {
   for (const s of player.inv) if (s && s.id === id) n += s.qty;
   return n;
 }
-export function addItem(player: Player, content: Content, id: ItemId, qty: number): number {
-  const def = content.items[id];
-  if (!def) return qty;
+/** Stack `qty` of `id` into a slot array; returns the remainder that didn't fit. */
+function addStack(slots: (InvSlot | null)[], def: ItemDef, id: ItemId, qty: number): number {
   let left = qty;
-  for (const s of player.inv) {
+  for (const s of slots) {
     if (left <= 0) break;
     if (s && s.id === id && s.qty < def.stack) {
       const add = Math.min(def.stack - s.qty, left);
@@ -134,14 +135,42 @@ export function addItem(player: Player, content: Content, id: ItemId, qty: numbe
       left -= add;
     }
   }
-  for (let i = 0; i < player.inv.length && left > 0; i++) {
-    if (!player.inv[i]) {
+  for (let i = 0; i < slots.length && left > 0; i++) {
+    if (!slots[i]) {
       const add = Math.min(def.stack, left);
-      player.inv[i] = { id, qty: add };
+      slots[i] = { id, qty: add };
       left -= add;
     }
   }
   return left;
+}
+
+export function addItem(player: Player, content: Content, id: ItemId, qty: number): number {
+  const def = content.items[id];
+  if (!def) return qty;
+  return addStack(player.inv, def, id, qty);
+}
+
+/** Deposit a pack slot into the settlement stash. */
+export function storeToStash(world: World, content: Content, packIndex: number): void {
+  const s = world.player.inv[packIndex];
+  if (!s) return;
+  const def = content.items[s.id];
+  if (!def) return;
+  const left = addStack(world.stash, def, s.id, s.qty);
+  if (left <= 0) world.player.inv[packIndex] = null;
+  else s.qty = left;
+}
+
+/** Withdraw a stash slot into the pack. */
+export function takeFromStash(world: World, content: Content, stashIndex: number): void {
+  const s = world.stash[stashIndex];
+  if (!s) return;
+  const def = content.items[s.id];
+  if (!def) return;
+  const left = addStack(world.player.inv, def, s.id, s.qty);
+  if (left <= 0) world.stash[stashIndex] = null;
+  else s.qty = left;
 }
 export function removeItem(player: Player, id: ItemId, qty: number): boolean {
   if (countItem(player, id) < qty) return false;
@@ -268,6 +297,7 @@ export function createWorld(content: Content, rng: () => number): World {
     ground: [],
     props: layout.props,
     settlement: { structures: { palisade: 1, forge: 0, workshop: 0, quarters: 1 }, population: 0, roles: { gatherer: 0, forager: 0, guard: 0 } },
+    stash: new Array(STASH_SIZE).fill(null),
     home: layout.home,
     zoneId: "home",
     entry: { ...layout.playerStart },
@@ -566,7 +596,28 @@ function attackPlayer(world: World, content: Content, e: Enemy, out: GameEvent[]
   out.push({ t: "playerHurt", dmg });
   const infect = (e.kind === "revenant" ? 8 : e.kind === "wretch" ? 12 : e.boss ? 10 : 6) * playerMods(p).infectionMult;
   p.infection = Math.min(100, p.infection + infect);
-  if (p.hp <= 0) { p.hp = 0; p.alive = false; out.push({ t: "death" }); }
+}
+
+/**
+ * You don't die for good — your people drag you back to the settlement. You
+ * lose the pack you were carrying (but keep what you wield and wear, your
+ * level, skills, storage and settlement). A real setback, not a wipe.
+ */
+function downPlayer(world: World, content: Content, rng: () => number, out: GameEvent[]): void {
+  const p = world.player;
+  const dropped = p.inv.filter(Boolean).length;
+  for (let i = 0; i < p.inv.length; i++) p.inv[i] = null;
+  if (p.equipped) addItem(p, content, p.equipped, 1);
+  if (p.armor) addItem(p, content, p.armor, 1);
+  p.hp = Math.max(1, Math.round(p.maxHp * 0.5));
+  p.infection = 0;
+  p.hunger = Math.max(p.hunger, 25);
+  p.thirst = Math.max(p.thirst, 25);
+  p.nextAttack = 0; p.dashUntil = 0; p.invulnUntil = 0;
+  if (world.zoneId !== "home") travelTo(world, content, rng, "home", out);
+  else { p.pos = { x: world.entry.x + 0.5, y: world.entry.y + 0.5 }; stop(world); }
+  world.timeOfDay = 0.28;
+  out.push({ t: "downed", dropped });
 }
 
 // ---------------------------------------------------------------------------
@@ -587,7 +638,7 @@ export function nearestProp(world: World, maxDist: number): Prop | null {
 
 /** Non-searchable stations open UI instead of giving loot. */
 export function isStation(kind: Prop["kind"]): boolean {
-  return kind === "forge" || kind === "workbench" || kind === "hearth" || kind === "townboard" || kind === "maptable" || kind === "gate";
+  return kind === "forge" || kind === "workbench" || kind === "hearth" || kind === "townboard" || kind === "maptable" || kind === "stash" || kind === "gate";
 }
 
 function resolveInteract(world: World, content: Content, ctx: { rng: () => number }, pr: Prop, out: GameEvent[]): void {
@@ -784,7 +835,6 @@ export function tick(world: World, content: Content, ctx: { now: number; rng: ()
   let regen = pm.regen;
   if (world.zoneId === "home") regen += pm.rallyRegen;
   if (regen > 0 && p.hp > 0) p.hp = Math.min(p.maxHp, p.hp + regen * dt);
-  if (p.hp <= 0 && p.alive) { p.hp = 0; p.alive = false; out.push({ t: "death" }); return; }
 
   // Night raids — at home, thinned by the Palisade + Guards and kept outside the
   // walls; in the wilds they come unchecked.
@@ -849,6 +899,9 @@ export function tick(world: World, content: Content, ctx: { now: number; rng: ()
     }
   }
   world.ground = world.ground.filter((g) => g.item.qty > 0);
+
+  // Fall → dragged home (not a permadeath wipe).
+  if (p.hp <= 0) downPlayer(world, content, ctx.rng, out);
 
   if (world.enemies.length > 140) world.enemies = world.enemies.filter((e) => e.state !== "dead");
 }

@@ -8,7 +8,7 @@
  * are procedural (glyphs + item icons).
  */
 
-import type { Content, ItemId, SettlerRole, StructureId, World } from "../core/types.ts";
+import type { Content, InvSlot, ItemId, SettlerRole, StructureId, World } from "../core/types.ts";
 import { SETTLER_ROLES } from "../core/types.ts";
 import { glyph } from "./glyph.ts";
 import { itemIconSVG } from "./itemIcon.ts";
@@ -25,6 +25,8 @@ export interface HudHandlers {
   onAssign: (role: SettlerRole, delta: number) => void;
   onSkipTutorial: () => void;
   onSpendSkill: (nodeId: string) => void;
+  onStore: (packIndex: number) => void;
+  onTake: (stashIndex: number) => void;
 }
 
 const ROLE_INFO: Record<SettlerRole, { name: string; glyph: string; effect: string }> = {
@@ -47,12 +49,13 @@ export class Hud {
   private settle: HTMLElement;
   private travel: HTMLElement;
   private skillsP: HTMLElement;
+  private stashP: HTMLElement;
   private bossBar: HTMLElement;
   private tracker: HTMLElement;
   private tipEl: HTMLElement;
   private banner: HTMLElement;
   private audioBtn: HTMLButtonElement;
-  private mode: "none" | "pack" | "settle" | "travel" | "skills" = "none";
+  private mode: "none" | "pack" | "settle" | "travel" | "skills" | "stash" = "none";
   private near: NearStations = { forge: false, workshop: false };
   private log: string[] = [];
   private tipTimer = 0;
@@ -69,6 +72,7 @@ export class Hud {
     this.settle = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(520px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none" });
     this.travel = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(520px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none" });
     this.skillsP = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(780px,96vw)", maxHeight: "90vh", overflow: "auto", display: "none" });
+    this.stashP = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(680px,94vw)", maxHeight: "88vh", overflow: "auto", display: "none" });
 
     this.bossBar = this.floating({ left: "50%", top: "64px", transform: "translateX(-50%)", width: "min(440px,72vw)", display: "none", textAlign: "center" });
     this.tracker = this.panel({ left: "12px", top: "172px", maxWidth: "230px", display: "none" });
@@ -134,12 +138,14 @@ export class Hud {
     this.settle.style.display = this.mode === "settle" ? "block" : "none";
     this.travel.style.display = this.mode === "travel" ? "block" : "none";
     this.skillsP.style.display = this.mode === "skills" ? "block" : "none";
+    this.stashP.style.display = this.mode === "stash" ? "block" : "none";
   }
   togglePack(): void { this.mode = this.mode === "pack" ? "none" : "pack"; this.show(); }
   toggleSkills(): void { this.mode = this.mode === "skills" ? "none" : "skills"; this.show(); }
   openPack(): void { this.mode = "pack"; this.show(); }
   openSettlement(): void { this.mode = "settle"; this.show(); }
   openTravel(): void { this.mode = "travel"; this.show(); }
+  openStash(): void { this.mode = "stash"; this.show(); }
   closeAll(): void { this.mode = "none"; this.show(); }
 
   showBanner(title: string, sub: string, hold = 2200): void {
@@ -226,6 +232,35 @@ export class Hud {
     else if (this.mode === "settle") this.renderSettlement(world);
     else if (this.mode === "travel") this.renderTravel(world);
     else if (this.mode === "skills") this.renderSkills(world);
+    else if (this.mode === "stash") this.renderStash(world);
+  }
+
+  private renderStash(world: World): void {
+    const cell = (s: InvSlot | null, kind: string, i: number): string => {
+      if (!s) return `<div class="slot empty"></div>`;
+      const def = this.content.items[s.id]!;
+      return `<div class="slot" data-${kind}="${i}" title="${def.name} — ${def.desc}"><div class="ic">${itemIconSVG(def)}</div>${s.qty > 1 ? `<span class="q">${s.qty}</span>` : ""}</div>`;
+    };
+    const pack = world.player.inv.map((s, i) => cell(s, "store", i)).join("");
+    const stash = world.stash.map((s, i) => cell(s, "take", i)).join("");
+    this.stashP.innerHTML =
+      `<style>
+        #hud-stash .grid{display:grid;gap:5px;margin-bottom:12px}
+        #hud-stash .pk{grid-template-columns:repeat(6,1fr)}
+        #hud-stash .sk{grid-template-columns:repeat(8,1fr)}
+        #hud-stash .slot{aspect-ratio:1;background:#101112;border:1px solid #26282a;border-radius:3px;position:relative;cursor:pointer}
+        #hud-stash .slot.empty{opacity:.4;cursor:default}#hud-stash .slot .ic{width:100%;height:100%;padding:3px}
+        #hud-stash .slot .q{position:absolute;bottom:1px;right:3px;font-size:11px}
+      </style>
+      <div id="hud-stash">
+        <div class="hud-heading">Your Pack <span style="color:var(--ink-dim);text-transform:none;letter-spacing:0">— click to store ▸</span></div>
+        <div class="grid pk">${pack}</div>
+        <div class="hud-heading">Storage <span style="color:var(--ink-dim);text-transform:none;letter-spacing:0">— click to take ◂ · safe if you fall</span></div>
+        <div class="grid sk">${stash}</div>
+        <div style="text-align:center;margin-top:8px;font-size:12px;color:var(--ink-dim)">Bank your gains here before a dangerous run. [Esc] close</div>
+      </div>`;
+    this.stashP.querySelectorAll<HTMLElement>(".slot[data-store]").forEach((el) => { el.onclick = () => this.handlers.onStore(Number(el.dataset["store"])); });
+    this.stashP.querySelectorAll<HTMLElement>(".slot[data-take]").forEach((el) => { el.onclick = () => this.handlers.onTake(Number(el.dataset["take"])); });
   }
 
   private renderSkills(world: World): void {

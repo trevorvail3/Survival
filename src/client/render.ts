@@ -247,6 +247,16 @@ function drawProp(g: CanvasRenderingContext2D, pr: Prop, now: number): void {
         g.fillStyle = "#caa07a"; g.beginPath(); g.arc(cx, cy - TILE * 0.12, TILE * 0.13, 0, Math.PI * 2); g.fill();
       }
       break;
+    case "stash": {
+      // A big banded storage chest (distinct from lootable chests).
+      g.fillStyle = "#4a3620"; rr(g, cx - TILE * 0.42, cy - TILE * 0.28, TILE * 0.84, TILE * 0.56, 3); g.fill();
+      g.strokeStyle = "#20160c"; g.lineWidth = 2.5; g.stroke();
+      g.fillStyle = "#2a1d10"; g.fillRect(cx - TILE * 0.42, cy - TILE * 0.02, TILE * 0.84, 4);
+      g.strokeStyle = "#8a6a3a"; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(cx - TILE * 0.22, cy - TILE * 0.28); g.lineTo(cx - TILE * 0.22, cy + TILE * 0.28); g.moveTo(cx + TILE * 0.22, cy - TILE * 0.28); g.lineTo(cx + TILE * 0.22, cy + TILE * 0.28); g.stroke();
+      g.fillStyle = "#caa24a"; g.fillRect(cx - 2, cy - 2, 4, 6);
+      break;
+    }
     case "maptable": {
       // A cartographer's table: legs, a parchment map, and a few markers.
       g.fillStyle = "#4a3826";

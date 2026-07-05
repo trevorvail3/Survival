@@ -21,6 +21,8 @@ import {
   playerMods,
   restAtHearth,
   spendSkill,
+  storeToStash,
+  takeFromStash,
   throwFirepot,
   tick,
   travelTo,
@@ -32,7 +34,7 @@ import { Fx } from "./fx.ts";
 import { Input } from "./input.ts";
 import { Hud, HOTBAR } from "./hud.ts";
 import { audio } from "./audio.ts";
-import { clearSave, saveGame } from "./save.ts";
+import { saveGame } from "./save.ts";
 import { Tutorial } from "./onboarding.ts";
 
 export class Game {
@@ -122,6 +124,7 @@ export class Game {
         if (pr.kind === "hearth") { restAtHearth(world, this.content, this.rng, this.events); this.dispatch(this.events, now); this.events.length = 0; }
         else if (pr.kind === "townboard") { this.hud.openSettlement(); this.tut("board"); }
         else if (pr.kind === "waystone" || pr.kind === "maptable") this.hud.openTravel();
+        else if (pr.kind === "stash") this.hud.openStash();
         else if (pr.kind === "forge" || pr.kind === "workbench") { this.hud.openPack(); this.tut("pack"); }
       }
       this.pendingStation = null;
@@ -224,7 +227,7 @@ export class Game {
     const LABELS: Partial<Record<string, string>> = {
       chest: "Search chest", crate: "Search crate", barrel: "Search barrel", remains: "Search remains", cart: "Search wreck",
       tree: "Fell timber", rock: "Mine stone", herbs: "Gather herbs", survivor: "Rescue survivor",
-      forge: "Work the forge", workbench: "Use the workshop", hearth: "Rest until dawn", townboard: "Muster the settlement", waystone: "Read the waystone", maptable: "Study the war map",
+      forge: "Work the forge", workbench: "Use the workshop", hearth: "Rest until dawn", townboard: "Muster the settlement", waystone: "Read the waystone", maptable: "Study the war map", stash: "Open storage",
     };
     const CONSUMED = new Set(["chest", "crate", "barrel", "remains", "cart", "survivor", "tree", "rock", "herbs"]);
     let pd = 0.8; let label: string | null = null;
@@ -260,6 +263,8 @@ export class Game {
       onUseSlot: (i: number) => { const ev: GameEvent[] = []; useSlot(this.world, this.content, i, ev); this.dispatch(ev, performance.now()); },
       onSkipTutorial: () => { this.tutorial.skip(); this.hud.setTask(null); },
       onSpendSkill: (nodeId: string) => { spendSkill(this.world, nodeId); },
+      onStore: (i: number) => { storeToStash(this.world, this.content, i); },
+      onTake: (i: number) => { takeFromStash(this.world, this.content, i); },
       onTravel: (regionId: string) => {
         const ev: GameEvent[] = [];
         if (travelTo(this.world, this.content, this.rng, regionId, ev)) {
@@ -309,7 +314,12 @@ export class Game {
         case "equip": audio.play("equip"); break;
         case "dayBreak": audio.play("daybreak"); audio.setScene("day"); this.hud.showBanner(`Day ${e.day}`, "You saw the dawn.", 2200); break;
         case "nightFall": audio.play("nightfall"); audio.setScene("night"); this.hud.showBanner("Nightfall", "The dead walk. Hold your walls.", 2200); this.tut("night"); break;
-        case "death": audio.play("death"); audio.setScene("day"); clearSave(); this.hud.showDeath(this.world.day); break;
+        case "downed":
+          audio.play("death"); audio.setScene("day");
+          this.snapCamera();
+          this.hud.showBanner("Dragged Back", e.dropped > 0 ? `You fell — your pack is lost in the wilds. You wake at the hearth.` : "You fell, and wake at the hearth.", 3200);
+          this.hud.pushLog("You were dragged home. Your carried pack is lost.");
+          break;
         case "log": this.hud.pushLog(e.msg); break;
       }
     }
