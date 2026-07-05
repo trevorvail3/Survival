@@ -30,7 +30,8 @@ import { findPath, pathToAdjacent } from "../client/pathfinding.ts";
 import { generateHome, generateRegion } from "../content/map.ts";
 import { regionById } from "../content/regions.ts";
 import { rollLoot } from "../content/loot.ts";
-import { settlementCapacity } from "../content/settlement.ts";
+import { settlementCapacity, SETTLER_NAMES } from "../content/settlement.ts";
+import { pick } from "./rng.ts";
 import { computeMods, nodeUnlocked, SKILLS, xpForNext } from "../content/skills.ts";
 import type { Mods } from "../content/skills.ts";
 
@@ -296,7 +297,7 @@ export function createWorld(content: Content, rng: () => number): World {
     enemies: [],
     ground: [],
     props: layout.props,
-    settlement: { structures: { palisade: 1, forge: 0, workshop: 0, quarters: 1 }, population: 0, roles: { gatherer: 0, forager: 0, guard: 0 } },
+    settlement: { structures: { palisade: 1, forge: 0, workshop: 0, quarters: 1 }, population: 0, roles: { gatherer: 0, forager: 0, guard: 0 }, names: [] },
     stash: new Array(STASH_SIZE).fill(null),
     home: layout.home,
     zoneId: "home",
@@ -652,8 +653,10 @@ function resolveInteract(world: World, content: Content, ctx: { rng: () => numbe
     }
     pr.used = true;
     world.settlement.population++;
+    const name = pick(ctx.rng, SETTLER_NAMES);
+    world.settlement.names.push(name);
     out.push({ t: "recruit" });
-    out.push({ t: "log", msg: "A survivor joins your settlement." });
+    out.push({ t: "log", msg: `${name} joins your settlement.` });
     grantXp(world, 45, out);
     return;
   }

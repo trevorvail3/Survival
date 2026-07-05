@@ -409,6 +409,36 @@ function drawGround(g: CanvasRenderingContext2D, gi: GroundItem, now: number): v
   g.beginPath(); g.moveTo(cx, cy - 4); g.lineTo(cx + 4, cy); g.lineTo(cx, cy + 4); g.lineTo(cx - 4, cy); g.closePath(); g.fill(); g.stroke();
 }
 
+// Which role a settler figure shows, by index against the assigned counts.
+function settlerRole(world: World, i: number): "gatherer" | "forager" | "guard" | "idle" {
+  const r = world.settlement.roles;
+  if (i < r.gatherer) return "gatherer";
+  if (i < r.gatherer + r.forager) return "forager";
+  if (i < r.gatherer + r.forager + r.guard) return "guard";
+  return "idle";
+}
+const SETTLER_SKIN = ["#c99873", "#b98b6a", "#a97a52", "#d0a785"];
+
+/** The rescued, milling about inside the walls — names above, role-tinted. */
+function drawSettlers(g: CanvasRenderingContext2D, world: World, now: number): void {
+  const st = world.settlement, h = world.home;
+  const jacketOf: Record<string, string> = { gatherer: "#6b5236", forager: "#4f6a3a", guard: "#3c4650", idle: "#5a4636" };
+  for (let i = 0; i < st.population; i++) {
+    const col = i % 4, row = Math.floor(i / 4);
+    const bx = h.x + 4 + col * 3.2, by = h.y + h.h - 4 + row * 2.2;
+    const t = now / 1500 + i * 1.7;
+    const wx = bx + Math.cos(t) * 0.5, wy = by + Math.sin(t * 1.3) * 0.35;
+    const role = settlerRole(world, i);
+    const look = { skin: SETTLER_SKIN[i % SETTLER_SKIN.length]!, jacket: jacketOf[role]!, hood: "#3a3020", pack: "#4a3826" };
+    drawSurvivor(g, wx * TILE, wy * TILE, TILE * 0.8, Math.sin(t) * 0.6 + Math.PI / 2, look, { now, moving: true }, "fist");
+    const name = st.names[i] ?? "Survivor";
+    g.font = "600 10px Cinzel, serif"; g.textAlign = "center";
+    g.fillStyle = "rgba(0,0,0,0.7)"; g.fillText(name, wx * TILE + 1, (wy - 0.62) * TILE + 1);
+    g.fillStyle = "#d8cbb0"; g.fillText(name, wx * TILE, (wy - 0.62) * TILE);
+    g.textAlign = "left";
+  }
+}
+
 const ARMOR_TONE: Record<string, string> = { leather: "#6e4a2c", iron: "#8a9096", steel: "#b6bcc4" };
 function weaponKindOf(world: World, content: Content): WeaponKind {
   const def = world.player.equipped ? content.items[world.player.equipped] : undefined;
@@ -441,6 +471,8 @@ export function drawWorld(
     if (e.pos.x < minX - 2 || e.pos.x > maxX + 2 || e.pos.y < minY - 2 || e.pos.y > maxY + 2) continue;
     drawEnemy(g, e, now);
   }
+
+  if (world.zoneId === "home" && world.settlement.population > 0) drawSettlers(g, world, now);
 
   const p = world.player;
 

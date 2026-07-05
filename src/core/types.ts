@@ -265,6 +265,8 @@ export interface Settlement {
   population: number;
   /** How many settlers are assigned to each role (rest are idle). */
   roles: Record<SettlerRole, number>;
+  /** Names of the rescued, parallel to population — shown over their figures. */
+  names: string[];
 }
 
 // ---------------------------------------------------------------------------

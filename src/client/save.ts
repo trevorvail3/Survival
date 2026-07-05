@@ -42,6 +42,8 @@ export function loadGame(): { seed: number; world: World } | null {
     const w = blob.world as unknown as Record<string, unknown>;
     if (typeof w["won"] !== "boolean") w["won"] = false;
     if (!Array.isArray(w["stash"])) w["stash"] = new Array(48).fill(null);
+    const st = blob.world.settlement as unknown as Record<string, unknown>;
+    if (st && !Array.isArray(st["names"])) st["names"] = [];
     return { seed: blob.seed, world: blob.world };
   } catch {
     return null;
