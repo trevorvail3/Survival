@@ -56,6 +56,10 @@ export const LOOT: Record<string, LootEntry[]> = {
     { id: "herb", chance: 1, min: 1, max: 3 },
     { id: "bread", chance: 0.2, min: 1, max: 1 },
   ],
+  fishing: [
+    { id: "raw_fish", chance: 1, min: 1, max: 2 },
+    { id: "bone", chance: 0.15, min: 1, max: 1 },
+  ],
   // --- Region-flavoured chest tables (each region rewards something different) ---
   woods_chest: [
     { id: "wood", chance: 0.7, min: 2, max: 4 },

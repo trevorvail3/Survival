@@ -34,9 +34,18 @@ import { drawLighting, drawWorld, TILE, type Camera } from "./render.ts";
 import { Fx } from "./fx.ts";
 import { Input } from "./input.ts";
 import { Hud, HOTBAR } from "./hud.ts";
+import { SKILL_META, type SkillId } from "../content/trainskills.ts";
+import { RARITY_META, type Rarity } from "../content/gear.ts";
 import { audio, type SceneKey } from "./audio.ts";
 import { saveGame } from "./save.ts";
 import { Tutorial } from "./onboarding.ts";
+
+// Elden-Ring-style titles, hailed the first time a boss turns on you in a region.
+const BOSS_EPITHET: Partial<Record<string, string>> = {
+  prior: "Keeper of the Cold Vigil",
+  graveking: "Sovereign of the Iron Dead",
+  rotmother: "Firstborn of the Plague",
+};
 
 export class Game {
   private g: CanvasRenderingContext2D;
@@ -46,6 +55,8 @@ export class Game {
   private viewH = 0;
   private last = 0;
   private raf = 0;
+  private bankTipShown = false;
+  private bossHailed = new Set<string>();
   private shake = 0;
   private nextHeartbeat = 0;
   private events: GameEvent[] = [];
@@ -230,10 +241,10 @@ export class Game {
     // chest never occludes the live tree behind it.
     const LABELS: Partial<Record<string, string>> = {
       chest: "Search chest", crate: "Search crate", barrel: "Search barrel", remains: "Search remains", cart: "Search wreck",
-      tree: "Fell timber", rock: "Mine stone", herbs: "Gather herbs", survivor: "Rescue survivor",
+      tree: "Fell timber", rock: "Mine stone", herbs: "Gather herbs", fishpool: "Fish the water", survivor: "Rescue survivor",
       forge: "Work the forge", workbench: "Use the workshop", hearth: "Rest until dawn", townboard: "Muster the settlement", waystone: "Read the waystone", maptable: "Study the war map", stash: "Open storage",
     };
-    const CONSUMED = new Set(["chest", "crate", "barrel", "remains", "cart", "survivor", "tree", "rock", "herbs"]);
+    const CONSUMED = new Set(["chest", "crate", "barrel", "remains", "cart", "survivor", "tree", "rock", "herbs", "fishpool"]);
     let pd = 0.8; let label: string | null = null;
     for (const pr of this.world.props) {
       if (!LABELS[pr.kind]) continue;
@@ -281,15 +292,22 @@ export class Game {
       onTogglePack: () => { this.hud.togglePack(); audio.play("click"); this.tut("pack"); },
       onToggleSkills: () => { this.hud.toggleSkills(); audio.play("click"); },
       onTravel: (regionId: string) => {
+        const fromHome = this.world.zoneId === "home";
         const ev: GameEvent[] = [];
         if (travelTo(this.world, this.content, this.rng, regionId, ev)) {
           this.tut("travel");
+          this.bossHailed.clear(); // a fresh region — its lord may be hailed again
           this.hud.closeAll();
           this.snapCamera();
           audio.setScene(regionId === "home" ? (isNight(this.world.timeOfDay) ? "night" : "day") : (regionId as SceneKey));
           const name = regionId === "home" ? "Your Settlement" : (this.content.regions.find((r) => r.id === regionId)?.name ?? "the wilds");
           this.hud.showBanner(name, regionId === "home" ? "Home again." : "Watch the light.", 1800);
           this.dispatch(ev, performance.now());
+          // Extraction nudge: heading out heavy means a fall costs you the haul.
+          if (regionId !== "home" && fromHome && !this.bankTipShown) {
+            const carried = this.world.player.inv.filter(Boolean).length;
+            if (carried >= 5) { this.hud.tip("Fall out here and you lose your <b>pack</b> — bank your haul at the <b>stash</b> before a risky run."); this.bankTipShown = true; }
+          }
         }
       },
     };
@@ -310,10 +328,17 @@ export class Game {
         case "dodge": audio.play("dodge"); this.fx.sparks(e.x, e.y, "#b8c2cc", 5); break;
         case "noammo": audio.play("dryfire"); this.hud.pushLog("Out of arrows."); break;
         case "hit": audio.play(e.crit ? "crit" : "hit"); this.fx.blood(e.x, e.y, e.crit ? 16 : 9); this.fx.float(e.x, e.y - 0.4, String(e.dmg), e.crit ? "#ff6a4a" : "#e8d8b0", e.crit ? 17 : 13); break;
+        case "miss": this.fx.float(e.x, e.y - 0.4, "miss", "#7d858c", 11); break;
         case "throw": audio.play("throw"); break;
         case "explode": audio.play("explode"); this.fx.explosion(e.x, e.y); this.shake = Math.max(this.shake, 14); break;
         case "kill": audio.creature(e.kind, "die"); this.fx.blood(e.x, e.y, 22); break;
-        case "aggro": audio.creature(e.kind, "aggro"); audio.sting(); break;
+        case "aggro":
+          audio.creature(e.kind, "aggro"); audio.sting();
+          if (BOSS_EPITHET[e.kind] && !this.bossHailed.has(e.kind)) {
+            this.bossHailed.add(e.kind);
+            this.hud.showBanner(this.content.enemies[e.kind].name, BOSS_EPITHET[e.kind]!, 3400);
+          }
+          break;
         case "playerHurt": audio.play("hurt"); this.fx.float(p.pos.x, p.pos.y - 0.6, `-${e.dmg}`, "#ff4a3a", 15); this.fx.blood(p.pos.x, p.pos.y, 6); this.shake = Math.max(this.shake, 6 + e.dmg * 0.2); this.tut("hurt"); break;
         case "pickup": audio.play("pickup"); this.hud.pushLog(`+${e.qty} ${this.content.items[e.id]?.name ?? e.id}`); break;
         case "gather": audio.play("gather"); this.tut("gather"); break;
@@ -322,7 +347,14 @@ export class Game {
         case "build": audio.play("build"); this.hud.pushLog(`${this.content.structures[e.id].name} raised to level ${e.level}.`); this.hud.showBanner(this.content.structures[e.id].name, `Level ${e.level}`, 1500); break;
         case "recruit": audio.play("recruit"); this.tut("rescue"); break;
         case "levelUp": audio.play("levelup"); this.hud.showBanner(`Level ${e.level}`, "A skill point earned — press C.", 2000); this.hud.pushLog(`You reach level ${e.level}.`); break;
-        case "victory": audio.play("levelup"); audio.play("daybreak"); this.hud.showBanner("The Vale is Cleansed", "The Rot-Mother is dead. The plague ends with you.", 6000); this.hud.pushLog("You have won. The Vale is free — range on if you wish."); break;
+        case "skillup": { const m = SKILL_META[e.skill as SkillId]; audio.play("click"); this.hud.tip(`<b>${m?.name ?? e.skill}</b> level ${e.level}`); this.hud.pushLog(`${m?.name ?? e.skill} advanced to ${e.level}.`); break; }
+        case "drop": {
+          const rm = RARITY_META[e.rarity as Rarity]; const nm = this.content.items[e.id]?.name ?? e.id;
+          this.hud.pushLog(`Dropped: <span style="color:${rm?.color ?? "#ccc"}">${rm?.name ?? ""} ${nm}</span> ◈${e.power}`);
+          if (e.rarity === "epic" || e.rarity === "legendary") { audio.play("levelup"); this.hud.tip(`<span style="color:${rm.color}">${rm.name}</span> drop — <b>${nm}</b> ◈${e.power}`); }
+          break;
+        }
+        case "victory": audio.play("levelup"); audio.play("daybreak"); this.hud.showBanner("The Hold is Cleansed", "The Rot-Mother is dead. The plague ends with you.", 6000); this.hud.pushLog("You have won. The Hold is free — range on if you wish."); break;
         case "heal": audio.play("heal"); break;
         case "eat": audio.play("eat"); break;
         case "drink": audio.play("drink"); break;
@@ -333,8 +365,13 @@ export class Game {
         case "downed":
           audio.play("death"); audio.setScene("day"); audio.setBossMusic(false);
           this.snapCamera();
-          this.hud.showBanner("Dragged Back", e.dropped > 0 ? `You fell — your pack is lost in the wilds. You wake at the hearth.` : "You fell, and wake at the hearth.", 3200);
-          this.hud.pushLog("You were dragged home. Your carried pack is lost.");
+          if (e.lost) {
+            this.hud.showBanner("Dragged Back", e.dropped > 0 ? `You fell in the wilds — the ${e.dropped} thing${e.dropped === 1 ? "" : "s"} in your pack are lost. Bank your haul next time.` : "You fell in the wilds. You wake at the hearth.", 3600);
+            this.hud.pushLog(e.dropped > 0 ? `Your unbanked pack (${e.dropped}) was lost out there.` : "You were dragged home.");
+          } else {
+            this.hud.showBanner("You Fell", "Your people carried you in. Home held — your pack is safe.", 3000);
+            this.hud.pushLog("You were downed behind the walls, but kept everything.");
+          }
           break;
         case "log": this.hud.pushLog(e.msg); break;
       }

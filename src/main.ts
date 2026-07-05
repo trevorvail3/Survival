@@ -69,7 +69,7 @@ const veil = document.createElement("div");
 veil.id = "veil";
 veil.innerHTML = `
   <div class="title">ASHFALL</div>
-  <div class="tagline">A Plague of the Risen</div>
+  <div class="tagline">A Nord Hold, and the Dead That Keep It</div>
   <div class="lines" id="veilLines"></div>
   <div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center">
     ${saved ? `<button class="start" id="continueBtn">Continue</button>` : ""}
@@ -82,9 +82,11 @@ veil.innerHTML = `
 app.appendChild(veil);
 
 const LINES = [
-  "The plague took the living, and would not let them lie still. Now the dead walk the vale.",
-  "You hold one walled steading against the night. Rally survivors. Raise the forge. Arm your people.",
-  "Range out by day for timber, ore and herbs. Be behind your walls when the dark comes.",
+  "The plague came to the hold, and the dead would not lie still. The barrows stand open. The living are few.",
+  "You hold a condemned castle — its curtain wall still stands, its bailey a ruin. Reclaim it stone by stone: forge, workshop, hall.",
+  "Basic timber, ore and fish are yours at home, and the means to work them. The richer lodes — and the real gear — lie out in the dark.",
+  "Range out by day to gather, fight and loot; be behind your walls before dark. Fall out there, and the wilds keep your unbanked haul.",
+  "Three lords hold the rot together. The Pale Prior. The Barrow King. And at the Rotcradle, the Mother of it all.",
 ];
 const linesEl = veil.querySelector<HTMLElement>("#veilLines")!;
 let li = 1;

@@ -20,6 +20,7 @@ import type {
   ItemId,
   Player,
   Prop,
+  Recipe,
   SettlerRole,
   StructureId,
   Vec2,
@@ -34,6 +35,9 @@ import { settlementCapacity, SETTLER_NAMES } from "../content/settlement.ts";
 import { pick } from "./rng.ts";
 import { computeMods, nodeUnlocked, SKILLS, xpForNext } from "../content/skills.ts";
 import type { Mods } from "../content/skills.ts";
+import { levelForXp, SKILL_META } from "../content/trainskills.ts";
+import type { SkillId } from "../content/trainskills.ts";
+import { weaponDamage, armorSoak, characterPower, rollRarity, rollPower, type Rarity } from "../content/gear.ts";
 
 export const PLAYER_RADIUS = 0.34;
 export const INV_COLS = 6;
@@ -62,6 +66,7 @@ export type GameEvent =
   | { t: "dodge"; x: number; y: number }
   | { t: "noammo" }
   | { t: "hit"; x: number; y: number; dmg: number; crit: boolean }
+  | { t: "miss"; x: number; y: number }
   | { t: "throw" }
   | { t: "explode"; x: number; y: number }
   | { t: "kill"; kind: EnemyKind; x: number; y: number }
@@ -74,6 +79,8 @@ export type GameEvent =
   | { t: "build"; id: StructureId; level: number }
   | { t: "recruit" }
   | { t: "levelUp"; level: number }
+  | { t: "skillup"; skill: string; level: number }
+  | { t: "drop"; id: ItemId; rarity: string; power: number }
   | { t: "victory" }
   | { t: "heal" }
   | { t: "eat" }
@@ -82,7 +89,7 @@ export type GameEvent =
   | { t: "equip" }
   | { t: "dayBreak"; day: number }
   | { t: "nightFall"; day: number }
-  | { t: "downed"; dropped: number }
+  | { t: "downed"; dropped: number; lost: boolean }
   | { t: "log"; msg: string };
 
 // ---------------------------------------------------------------------------
@@ -195,6 +202,8 @@ export function removeItem(player: Player, id: ItemId, qty: number): boolean {
 const BASE_HP = 100;
 const HP_PER_LEVEL = 5;
 
+const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
+
 export function playerMods(player: Player): Mods {
   return computeMods(player.skills);
 }
@@ -218,6 +227,38 @@ export function grantXp(world: World, amount: number, out: GameEvent[]): void {
     p.hp = p.maxHp; // a level-up mends you fully
     out.push({ t: "levelUp", level: p.level });
   }
+}
+
+/** Current level in a trainable (OSRS-style) skill. */
+export function skillLevel(world: World, id: SkillId): number {
+  return levelForXp(world.player.trained[id] ?? 0);
+}
+
+/** Grant XP-by-doing to a trainable skill; emits `skillup` on each new level. */
+export function grantSkillXp(world: World, id: SkillId, amount: number, out: GameEvent[]): void {
+  const p = world.player;
+  if (!p.alive || amount <= 0) return;
+  const before = levelForXp(p.trained[id] ?? 0);
+  p.trained[id] = (p.trained[id] ?? 0) + Math.round(amount);
+  const after = levelForXp(p.trained[id]!);
+  if (after > before) out.push({ t: "skillup", skill: id, level: after });
+}
+
+/** Character Power (gear score) — the Destiny-style striving number. */
+export function playerPower(world: World): number {
+  return characterPower(world.player.equipped, world.player.armor);
+}
+
+/** The recommended Power of the zone you're in (0 at the safe home base). */
+export function regionRecommendedPower(world: World): number {
+  return world.zoneId === "home" ? 0 : regionById(world.zoneId)?.power ?? 0;
+}
+
+/** Destiny-style over/under-Power scaling: how much damage you deal and take,
+ *  from the gap between your Power and the region's recommended Power. */
+function combatFactors(world: World): { deal: number; take: number } {
+  const delta = playerPower(world) - regionRecommendedPower(world);
+  return { deal: clamp(1 + delta * 0.02, 0.45, 1.9), take: clamp(1 - delta * 0.02, 0.5, 2.1) };
 }
 
 export function canSpendSkill(world: World, nodeId: string): boolean {
@@ -270,7 +311,7 @@ export function createWorld(content: Content, rng: () => number): World {
     path: [],
     order: { type: "none" },
     inv,
-    equipped: "rusty_sword",
+    equipped: { id: "rusty_sword", qty: 1 },
     armor: null,
     nextAttack: 0,
     infection: 0,
@@ -283,6 +324,7 @@ export function createWorld(content: Content, rng: () => number): World {
     xp: 0,
     points: 0,
     skills: {},
+    trained: {},
   };
   addItem(player, content, "rusty_sword", 1);
   addItem(player, content, "poultice", 2);
@@ -353,7 +395,7 @@ export function travelTo(world: World, content: Content, rng: () => number, targ
     const def = regionById(targetId);
     if (!def) return false;
     if (def.requires && !def.requires.every((k) => world.bossesSlain.includes(k))) {
-      out.push({ t: "log", msg: "The way is sealed until the Vale's wardens have fallen." });
+      out.push({ t: "log", msg: "The way is sealed until the Hold's wardens have fallen." });
       return false;
     }
     const layout = generateRegion(rng, def);
@@ -487,8 +529,8 @@ function advancePlayer(world: World, content: Content, ctx: { rng: () => number 
   if (order.type === "attack") {
     const e = world.enemies.find((x) => x.id === order.enemyId);
     if (!e || e.state === "dead") { stop(world); return; }
-    const def = p.equipped ? content.items[p.equipped] : content.items["fists"];
-    const wep = def?.weapon ?? content.items["fists"]!.weapon!;
+    const def = (p.equipped ? content.items[p.equipped.id] : undefined) ?? content.items["fists"]!;
+    const wep = def.weapon ?? content.items["fists"]!.weapon!;
     const dx = e.pos.x - p.pos.x, dy = e.pos.y - p.pos.y;
     const dist = Math.hypot(dx, dy);
     p.facing = Math.atan2(dy, dx);
@@ -530,8 +572,8 @@ function advancePlayer(world: World, content: Content, ctx: { rng: () => number 
 
 function attackTarget(world: World, content: Content, ctx: { rng: () => number }, e: Enemy, out: GameEvent[]): void {
   const p = world.player;
-  const def = p.equipped ? content.items[p.equipped] : content.items["fists"];
-  const wep = def?.weapon ?? content.items["fists"]!.weapon!;
+  const def = (p.equipped ? content.items[p.equipped.id] : undefined) ?? content.items["fists"]!;
+  const wep = def.weapon ?? content.items["fists"]!.weapon!;
   if (wep.kind === "bow") {
     if (countItem(p, wep.ammo!) <= 0) { out.push({ t: "noammo" }); return; }
     removeItem(p, wep.ammo!, 1);
@@ -541,9 +583,12 @@ function attackTarget(world: World, content: Content, ctx: { rng: () => number }
   }
   const eDef = content.enemies[e.kind];
   const m = playerMods(p);
+  const f = combatFactors(world);
+  // Damage comes from GEAR (weapon Power × rarity) and perks — not combat XP —
+  // then scaled by how your Power compares to the region's recommended Power.
   const crit = ctx.rng() < m.critChance;
   const berserk = p.hp / p.maxHp < 0.4 ? 1 + m.lowHpDmg : 1; // Berserker
-  let dmg = Math.round(wep.damage * m.meleeMult * berserk * (0.85 + ctx.rng() * 0.3) * (crit ? 1.8 : 1));
+  let dmg = Math.round(weaponDamage(def, p.equipped) * m.meleeMult * berserk * f.deal * (0.85 + ctx.rng() * 0.3) * (crit ? 1.8 : 1));
   dmg = Math.max(1, dmg - Math.max(0, eDef.armor - m.armorPen));
   damageEnemy(world, content, ctx, e, dmg, crit, out);
   // Knockback + brief stagger on solid hits.
@@ -571,6 +616,9 @@ function damageEnemy(world: World, content: Content, ctx: { rng: () => number },
     out.push({ t: "kill", kind: e.kind, x: e.pos.x, y: e.pos.y });
     const table = e.boss ? `kill_${e.kind}` : e.kind === "revenant" ? "kill_revenant" : "kill_common";
     for (const d of rollLoot(ctx.rng, table)) spawnGround(world, d.id, d.qty, e.pos.x, e.pos.y);
+    // Destiny-style gear: bosses always drop, tougher foes sometimes.
+    const gearDrops = e.boss ? 2 : ctx.rng() < 0.04 + content.enemies[e.kind].bounty * 0.012 ? 1 : 0;
+    for (let i = 0; i < gearDrops; i++) spawnGearDrop(world, content, ctx, e.pos.x, e.pos.y, out);
     if (e.boss) {
       if (!world.bossesSlain.includes(e.kind)) world.bossesSlain.push(e.kind);
       out.push({ t: "log", msg: `${content.enemies[e.kind].name} falls. Its hoard is yours.` });
@@ -587,12 +635,39 @@ function spawnGround(world: World, id: ItemId, qty: number, x: number, y: number
   world.ground.push({ id: world.nextId++, item: { id, qty }, pos: { x: x + (world.nextId % 5) * 0.05 - 0.12, y: y + (world.nextId % 3) * 0.05 } });
 }
 
+let gearPoolCache: ItemId[] | null = null;
+function gearPool(content: Content): ItemId[] {
+  if (!gearPoolCache) {
+    gearPoolCache = Object.values(content.items)
+      .filter((i) => i.id !== "fists" && (i.slot === "body" || (i.slot === "weapon" && !!i.weapon)))
+      .map((i) => i.id);
+  }
+  return gearPoolCache;
+}
+
+/** Drop a rolled gear instance (rarity + Power) around the region's power band. */
+function spawnGearDrop(world: World, content: Content, ctx: { rng: () => number }, x: number, y: number, out: GameEvent[]): void {
+  const pool = gearPool(content);
+  if (pool.length === 0) return;
+  const id = pick(ctx.rng, pool);
+  const danger = world.zoneId === "home" ? 1 : regionById(world.zoneId)?.danger ?? 1;
+  const rarity: Rarity = rollRarity(ctx.rng, danger);
+  const band = regionRecommendedPower(world) || 6;
+  const power = rollPower(ctx.rng, band, rarity);
+  world.ground.push({ id: world.nextId++, item: { id, qty: 1, power, rarity }, pos: { x: x + (world.nextId % 5) * 0.05 - 0.12, y: y + (world.nextId % 3) * 0.05 } });
+  out.push({ t: "drop", id, rarity, power });
+}
+
 function attackPlayer(world: World, content: Content, e: Enemy, out: GameEvent[]): void {
   const p = world.player;
   if (world.clock < p.invulnUntil) return; // dodged — no damage
   const eDef = content.enemies[e.kind];
-  const armorVal = p.armor ? content.items[p.armor]?.armor ?? 0 : 0;
-  const dmg = Math.max(1, Math.round(eDef.damage * (0.9 + Math.random() * 0.2)) - armorVal - playerMods(p).dmgReduce);
+  // Mitigation comes from your equipped armour (its Power × rarity) and perks;
+  // the region's Power gap scales incoming damage (under-Power hurts).
+  const bodyDef = p.armor ? content.items[p.armor.id] : undefined;
+  const armorVal = bodyDef ? armorSoak(bodyDef, p.armor) : 0;
+  const take = combatFactors(world).take;
+  const dmg = Math.max(1, Math.round(eDef.damage * take * (0.9 + Math.random() * 0.2)) - armorVal - playerMods(p).dmgReduce);
   p.hp -= dmg;
   out.push({ t: "playerHurt", dmg });
   const infect = (e.kind === "revenant" ? 8 : e.kind === "wretch" ? 12 : e.boss ? 10 : 6) * playerMods(p).infectionMult;
@@ -600,25 +675,31 @@ function attackPlayer(world: World, content: Content, e: Enemy, out: GameEvent[]
 }
 
 /**
- * You don't die for good — your people drag you back to the settlement. You
- * lose the pack you were carrying (but keep what you wield and wear, your
- * level, skills, storage and settlement). A real setback, not a wipe.
+ * You don't die for good — your people drag you back to the settlement. The
+ * extraction stake: fall OUT IN THE WILDS and you lose the unbanked pack you
+ * were carrying (but keep what you wield and wear, your level, skills, whatever
+ * you banked in storage, and the settlement). Fall behind your own walls and
+ * you keep everything — home is safe. Bank your haul before you get greedy.
  */
 function downPlayer(world: World, content: Content, rng: () => number, out: GameEvent[]): void {
   const p = world.player;
-  const dropped = p.inv.filter(Boolean).length;
-  for (let i = 0; i < p.inv.length; i++) p.inv[i] = null;
-  if (p.equipped) addItem(p, content, p.equipped, 1);
-  if (p.armor) addItem(p, content, p.armor, 1);
+  const inField = world.zoneId !== "home";
+  let lost = 0;
+  if (inField) {
+    // The haul you hadn't banked is gone. Your equipped loadout is separate
+    // from the pack, so it survives automatically.
+    lost = p.inv.filter(Boolean).length;
+    for (let i = 0; i < p.inv.length; i++) p.inv[i] = null;
+  }
   p.hp = Math.max(1, Math.round(p.maxHp * 0.5));
   p.infection = 0;
   p.hunger = Math.max(p.hunger, 25);
   p.thirst = Math.max(p.thirst, 25);
   p.nextAttack = 0; p.dashUntil = 0; p.invulnUntil = 0;
-  if (world.zoneId !== "home") travelTo(world, content, rng, "home", out);
+  if (inField) travelTo(world, content, rng, "home", out);
   else { p.pos = { x: world.entry.x + 0.5, y: world.entry.y + 0.5 }; stop(world); }
   world.timeOfDay = 0.28;
-  out.push({ t: "downed", dropped });
+  out.push({ t: "downed", dropped: lost, lost: inField });
 }
 
 // ---------------------------------------------------------------------------
@@ -662,14 +743,21 @@ function resolveInteract(world: World, content: Content, ctx: { rng: () => numbe
   }
   // Searchable / gatherable.
   if (pr.used) { out.push({ t: "log", msg: "Nothing left here." }); return; }
-  const isNode = pr.kind === "tree" || pr.kind === "rock" || pr.kind === "herbs";
+  const nodeSkill = NODE_SKILL[pr.kind]; // set only for gather nodes
+  const isNode = !!nodeSkill;
+  if (isNode && pr.reqLevel && skillLevel(world, nodeSkill!) < pr.reqLevel) {
+    out.push({ t: "log", msg: `This lode needs ${SKILL_META[nodeSkill!].name} ${pr.reqLevel} to work.` });
+    return;
+  }
   pr.used = true;
   if (isNode) { pr.respawnAt = world.clock + RESOURCE_RESPAWN_MS; out.push({ t: "gather" }); }
   else out.push({ t: "search" });
   const drops = rollLoot(ctx.rng, pr.loot ?? pr.kind);
   if (drops.length === 0) { out.push({ t: "log", msg: "Empty." }); return; }
   const pm = playerMods(world.player);
-  const bonus = isNode ? pm.gatherBonus : pm.lootLuck; // Forager / Scavenger
+  // Gathering skill: a higher level in the node's skill draws out more each time.
+  const skillBonus = nodeSkill ? Math.floor(skillLevel(world, nodeSkill) / 12) : 0;
+  const bonus = (isNode ? pm.gatherBonus : pm.lootLuck) + skillBonus; // Forager / Scavenger
   for (const d of drops) {
     const qty = d.qty + bonus;
     const left = addItem(world.player, content, d.id, qty);
@@ -678,7 +766,13 @@ function resolveInteract(world: World, content: Content, ctx: { rng: () => numbe
     if (left > 0) spawnGround(world, d.id, left, pr.pos.x + 0.5, pr.pos.y + 0.5);
   }
   grantXp(world, isNode ? 4 : 6, out);
+  if (nodeSkill) grantSkillXp(world, nodeSkill, nodeSkill === "fishing" ? 14 : 16, out);
 }
+
+/** Which trainable skill each gather-node prop trains (absent = not a node). */
+const NODE_SKILL: Partial<Record<Prop["kind"], SkillId>> = {
+  tree: "woodcutting", rock: "mining", herbs: "herblore", fishpool: "fishing",
+};
 
 export function restAtHearth(world: World, content: Content, rng: () => number, out: GameEvent[]): void {
   const p = world.player;
@@ -704,6 +798,13 @@ export function restAtHearth(world: World, content: Content, rng: () => number, 
 // Using items
 // ---------------------------------------------------------------------------
 
+/** Put a unique gear instance into the first empty pack slot, else drop it. */
+function placeInstance(world: World, inst: InvSlot): void {
+  const i = world.player.inv.findIndex((s) => !s);
+  if (i >= 0) world.player.inv[i] = inst;
+  else world.ground.push({ id: world.nextId++, item: inst, pos: { ...world.player.pos } });
+}
+
 export function useSlot(world: World, content: Content, slotIndex: number, out: GameEvent[]): void {
   const p = world.player;
   const slot = p.inv[slotIndex];
@@ -713,17 +814,26 @@ export function useSlot(world: World, content: Content, slotIndex: number, out: 
   const heal = playerMods(p).healMult; // Field Medic
   switch (def.use) {
     case "heal": p.hp = Math.min(p.maxHp, p.hp + (def.heal ?? 0) * heal); removeItem(p, slot.id, 1); out.push({ t: "heal" }); break;
-    case "food": p.hunger = Math.min(100, p.hunger + (def.food ?? 0)); removeItem(p, slot.id, 1); out.push({ t: "eat" }); break;
+    case "food": p.hunger = Math.min(100, p.hunger + (def.food ?? 0)); if (def.heal) p.hp = Math.min(p.maxHp, p.hp + def.heal * heal); removeItem(p, slot.id, 1); out.push({ t: "eat" }); break;
     case "drink": p.thirst = Math.min(100, p.thirst + (def.drink ?? 0)); removeItem(p, slot.id, 1); out.push({ t: "drink" }); break;
     case "cure":
       p.infection = Math.max(0, p.infection - (def.cure ?? 0));
       if (def.heal) p.hp = Math.min(p.maxHp, p.hp + def.heal * heal);
       removeItem(p, slot.id, 1); out.push({ t: "cure" }); break;
-    case "equip":
-      if (def.slot === "body") p.armor = def.id;
-      else p.equipped = def.id;
+    case "equip": {
+      if (def.slot !== "body" && !def.weapon) break;
+      const isBody = def.slot === "body";
+      const prev = isBody ? p.armor : p.equipped;
+      // Move the pack instance into the equip slot (gear is unique, qty 1).
+      const inst: InvSlot = { id: slot.id, qty: 1 };
+      if (slot.power !== undefined) inst.power = slot.power;
+      if (slot.rarity !== undefined) inst.rarity = slot.rarity;
+      p.inv[slotIndex] = null;
+      if (isBody) p.armor = inst; else p.equipped = inst;
+      if (prev) placeInstance(world, prev); // return the old gear to the pack
       out.push({ t: "equip" });
       break;
+    }
     default: break;
   }
 }
@@ -755,15 +865,35 @@ export function canCraft(world: World, content: Content, recipeId: string): bool
   const s = world.settlement.structures;
   if (r.forge && s.forge < r.forge) return false;
   if (r.workshop && s.workshop < r.workshop) return false;
+  const sk = recipeSkill(r);
+  if (r.reqLevel && skillLevel(world, sk) < r.reqLevel) return false;
   return r.inputs.every((i) => countItem(world.player, i.id) >= i.qty);
+}
+
+/** Which trainable skill a recipe trains — explicit, else inferred from station. */
+function recipeSkill(r: Recipe): SkillId {
+  if (r.skill) return r.skill as SkillId;
+  if (r.forge) return "smithing";
+  if (r.workshop) return "crafting";
+  return "herblore";
 }
 export function craft(world: World, content: Content, recipeId: string, out: GameEvent[]): boolean {
   const r = content.recipes.find((x) => x.id === recipeId);
   if (!r || !canCraft(world, content, recipeId)) return false;
   for (const i of r.inputs) removeItem(world.player, i.id, i.qty);
-  addItem(world.player, content, r.out, r.outQty);
+  const outDef = content.items[r.out]!;
+  if (outDef.slot === "body" || outDef.weapon) {
+    // Crafted gear is a reliable COMMON floor — its Power scales with your
+    // processing skill so you're never weaponless. The rarity chase (and the
+    // higher Power) still comes from expedition drops.
+    const power = Math.round(4 + skillLevel(world, recipeSkill(r)) * 0.8);
+    for (let n = 0; n < r.outQty; n++) placeInstance(world, { id: r.out, qty: 1, power, rarity: "common" });
+  } else {
+    addItem(world.player, content, r.out, r.outQty);
+  }
   out.push({ t: "craft", id: r.out });
   grantXp(world, 6, out);
+  grantSkillXp(world, recipeSkill(r), r.xp ?? 18, out);
   return true;
 }
 
@@ -794,6 +924,7 @@ export function build(world: World, content: Content, id: StructureId, out: Game
   for (const c of cost) removeItem(world.player, c.id, c.qty);
   world.settlement.structures[id] = level + 1;
   out.push({ t: "build", id, level: level + 1 });
+  grantSkillXp(world, "construction", 40 + level * 35, out);
   return true;
 }
 

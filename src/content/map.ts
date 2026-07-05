@@ -56,6 +56,28 @@ const walkableGround = (g: Grid, x: number, y: number): boolean => {
   return t === "grass" || t === "dirt" || t === "path" || t === "cobble" || t === "field";
 };
 
+/** Place up to `n` fishing spots on walkable tiles that border water. */
+function placeFishpools(
+  g: Grid,
+  addProp: (kind: Prop["kind"], x: number, y: number, loot?: string) => void,
+  rng: () => number,
+  skip: (x: number, y: number) => boolean,
+  n: number,
+): void {
+  const shore: { x: number; y: number }[] = [];
+  for (let y = 2; y < g.h - 2; y++) for (let x = 2; x < g.w - 2; x++) {
+    if (!walkableGround(g, x, y) || skip(x, y)) continue;
+    if (g.get(x + 1, y) === "water" || g.get(x - 1, y) === "water" || g.get(x, y + 1) === "water" || g.get(x, y - 1) === "water") shore.push({ x, y });
+  }
+  let placed = 0, guard = 0;
+  while (placed < n && shore.length > 0 && guard++ < n * 20) {
+    const i = randInt(rng, 0, shore.length - 1);
+    const s = shore.splice(i, 1)[0]!;
+    addProp("fishpool", s.x, s.y, "fishing");
+    placed++;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Home settlement (persistent hub)
 // ---------------------------------------------------------------------------
@@ -73,8 +95,15 @@ export function generateHome(rng: () => number): Layout {
   let pid = 1;
   const addProp = (kind: Prop["kind"], x: number, y: number, loot?: string) => { props.push({ id: pid++, kind, pos: { x, y }, used: false, ...(loot ? { loot } : {}) }); };
 
+  // A condemned castle: the stone curtain wall still stands (your safe bound),
+  // but the bailey within is half-ruined — cobble and rubble you slowly reclaim.
   const x0 = cx - 9, y0 = cy - 7, x1 = cx + 9, y1 = cy + 7;
-  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) g.set(x, y, x === x0 || x === x1 || y === y0 || y === y1 ? "wall" : "cobble");
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const edge = x === x0 || x === x1 || y === y0 || y === y1;
+    if (edge) { g.set(x, y, "wall"); continue; }
+    const corner = (Math.abs(x - x0) < 3 || Math.abs(x - x1) < 3) && (Math.abs(y - y0) < 3 || Math.abs(y - y1) < 3);
+    g.set(x, y, corner || rng() < 0.28 ? "rubble" : "cobble"); // ruined bailey
+  }
   g.set(cx, y1, "gate"); g.set(cx + 1, y1, "gate");
   addProp("gate", cx, y1);
   for (let y = y1 + 1; y < g.h - 3; y++) { g.set(cx, y, "path"); g.set(cx + 1, y, "path"); }
@@ -109,6 +138,13 @@ export function generateHome(rng: () => number): Layout {
   yard("tree", 5, "tree");
   yard("rock", 3, "rock");
   yard("herbs", 4, "herbs");
+
+  // A small pond in the yard with fishing spots (Fishing + Cooking at home).
+  const pcx = randInt(rng, 5, g.w - 6), pcy = randInt(rng, y1 + 3, g.h - 5);
+  for (let y = pcy - 2; y <= pcy + 2; y++) for (let x = pcx - 2; x <= pcx + 2; x++)
+    if ((x - pcx) ** 2 + (y - pcy) ** 2 <= 4 && rng() < 0.85) g.set(x, y, "water");
+  const inCompound = (x: number, y: number) => x >= x0 - 1 && x <= x1 + 1 && y >= y0 - 1 && y <= y1 + 1;
+  placeFishpools(g, addProp, rng, inCompound, 2);
 
   return { map: { w: g.w, h: g.h, tiles: g.tiles, indoor: g.indoor }, props, playerStart: { x: cx + 2, y: y1 - 2 }, home: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } };
 }
@@ -189,6 +225,18 @@ export function generateRegion(rng: () => number, def: RegionDef): Layout {
   scatterProp("rock", def.rockCount, "rock");
   scatterProp("herbs", def.herbCount, "herbs");
   scatterProp("remains", 5, "remains");
+
+  // Water + fishing spots on the shore (Fishing). The mire already has water;
+  // elsewhere carve a small pond so every region can be fished.
+  if (def.id !== "mire") blob("water", 1, 2, 3, 0.85);
+  placeFishpools(g, addProp, rng, nearEntry, 3);
+
+  // Expedition nodes are the higher tier: they demand a gathering level to work
+  // (home nodes are always free). Deeper regions need more skill.
+  const nodeReq = Math.max(0, (def.danger - 1) * 6);
+  if (nodeReq > 0) for (const pr of props) {
+    if (pr.kind === "tree" || pr.kind === "rock" || pr.kind === "herbs" || pr.kind === "fishpool") pr.reqLevel = nodeReq;
+  }
 
   // Enemy spawns, away from the entrance.
   const enemySpawns: { kind: EnemyKind; x: number; y: number; boss?: boolean }[] = [];

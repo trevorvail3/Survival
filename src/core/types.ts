@@ -89,6 +89,10 @@ export interface ItemDef {
   throwDamage?: number;
   throwRadius?: number;
   fire?: boolean;
+  /** Trainable skill required to wield/wear this (SkillId), e.g. "attack". */
+  reqSkill?: string;
+  /** Minimum level in `reqSkill` to equip. */
+  reqLevel?: number;
   desc: string;
 }
 
@@ -105,6 +109,10 @@ export interface WeaponDef {
 export interface InvSlot {
   id: ItemId;
   qty: number;
+  /** Gear instances (Destiny-style): a dropped weapon/armour carries its own
+   *  rolled Power and rarity. Absent on plain stackable resources. */
+  power?: number;
+  rarity?: string; // Rarity from content/gear.ts
 }
 
 export interface Recipe {
@@ -117,6 +125,12 @@ export interface Recipe {
   forge?: number;
   /** Minimum Workshop level required. */
   workshop?: number;
+  /** OSRS skill trained by making this (SkillId). Defaults from the station. */
+  skill?: string;
+  /** XP granted on a successful craft (defaults to a per-station base). */
+  xp?: number;
+  /** Minimum level in `skill` required to make it. */
+  reqLevel?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -180,6 +194,7 @@ export type PropKind =
   | "tree" // gather wood (depletes + regrows)
   | "rock" // gather stone/iron (depletes + regrows)
   | "herbs" // gather herbs/food (depletes + regrows)
+  | "fishpool" // fish the water (depletes + regrows)
   | "survivor" // rescuable settlement member
   | "waystone" // return stone in the wilds (opens the map)
   | "maptable" // the war map in the settlement (choose an expedition)
@@ -194,6 +209,8 @@ export interface Prop {
   loot?: string;
   /** ms clock time a depleted resource node regrows. */
   respawnAt?: number;
+  /** Gathering-skill level required to harvest (expedition nodes; 0/absent at home). */
+  reqLevel?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -217,8 +234,8 @@ export interface Player {
   path: Vec2[];
   order: PlayerOrder;
   inv: (InvSlot | null)[]; // the pack you carry (lost if you fall)
-  equipped: ItemId | null; // weapon
-  armor: ItemId | null; // body armour
+  equipped: InvSlot | null; // equipped weapon instance (rolled Power/rarity)
+  armor: InvSlot | null; // equipped body armour instance
   nextAttack: number;
   infection: number;
   alive: boolean;
@@ -235,8 +252,11 @@ export interface Player {
   xp: number;
   /** Unspent skill points. */
   points: number;
-  /** Ranks purchased per skill-node id. */
+  /** Ranks purchased per skill-node id (the perk constellations). */
   skills: Record<string, number>;
+  /** OSRS-style trainable skills: total XP per skill id (level derived).
+   *  Keyed by SkillId from content/trainskills.ts. */
+  trained: Record<string, number>;
 }
 
 // ---------------------------------------------------------------------------
@@ -285,6 +305,9 @@ export interface RegionDef {
   survivors: number;
   enemyMix: EnemyKind[]; // repeat a kind to weight it
   enemyCount: number;
+  /** Recommended Power (Destiny-style). Under it, foes hit harder; over it,
+   *  you dominate. Also the band around which this region's loot Power rolls. */
+  power: number;
   /** A named boss that guards this region (once-per-run), if any. */
   boss?: EnemyKind;
   /** Bosses that must be slain before this region can be entered. */

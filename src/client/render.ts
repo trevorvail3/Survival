@@ -236,6 +236,13 @@ function drawProp(g: CanvasRenderingContext2D, pr: Prop, now: number): void {
         g.fillStyle = "#a7c04a"; for (let i = -1; i <= 1; i++) { g.beginPath(); g.arc(cx + i * 5, cy - 8, 2, 0, Math.PI * 2); g.fill(); }
       }
       break;
+    case "fishpool":
+      // Concentric ripples on the water's edge; dims while fished out.
+      g.globalAlpha = depleted ? 0.4 : 0.9;
+      g.strokeStyle = "#6f9bb0"; g.lineWidth = 1.4;
+      for (let i = 1; i <= 3; i++) { g.beginPath(); g.arc(cx, cy, i * 3 + Math.sin(now / 500 + i) * 1.2, 0, Math.PI * 2); g.stroke(); }
+      if (!depleted) { g.fillStyle = "#9fc3d4"; g.beginPath(); g.arc(cx, cy, 1.6, 0, Math.PI * 2); g.fill(); }
+      break;
     case "survivor":
       if (!depleted) {
         // A kneeling figure with a faint hopeful glow.
@@ -441,11 +448,11 @@ function drawSettlers(g: CanvasRenderingContext2D, world: World, now: number): v
 
 const ARMOR_TONE: Record<string, string> = { leather: "#6e4a2c", iron: "#8a9096", steel: "#b6bcc4" };
 function weaponKindOf(world: World, content: Content): WeaponKind {
-  const def = world.player.equipped ? content.items[world.player.equipped] : undefined;
+  const def = world.player.equipped ? content.items[world.player.equipped.id] : undefined;
   return def?.weapon?.kind ?? "fist";
 }
 function armorToneOf(world: World, content: Content): string | null {
-  const def = world.player.armor ? content.items[world.player.armor] : undefined;
+  const def = world.player.armor ? content.items[world.player.armor.id] : undefined;
   if (!def) return null;
   return ARMOR_TONE[def.material ?? ""] ?? "#8a9096";
 }

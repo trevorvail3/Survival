@@ -23,6 +23,10 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   rope: def({ id: "rope", name: "Rope", shape: "coil", material: "rope", stack: 30, use: "none", desc: "Twisted hemp. Binds hafts and lashes palisades." }),
   oil: def({ id: "oil", name: "Lamp Oil", shape: "flask", material: "oil", stack: 20, use: "none", desc: "Rendered fat and pitch. It burns eagerly." }),
 
+  // --- Food chain (Fishing -> Cooking) ---
+  raw_fish: def({ id: "raw_fish", name: "Raw Fish", shape: "fish", material: "fish", stack: 20, use: "none", desc: "Cold and slick. Cook it before you trust it to your gut." }),
+  cooked_fish: def({ id: "cooked_fish", name: "Cooked Fish", shape: "fish", material: "cooked", stack: 20, use: "food", food: 40, heal: 12, desc: "Charred over the hearth. Fills the belly and mends a little." }),
+
   // --- Consumables ---
   poultice: def({ id: "poultice", name: "Poultice", shape: "poultice", material: "herb", stack: 15, use: "heal", heal: 40, desc: "Herb and linen packed to a wound. Closes it." }),
   bread: def({ id: "bread", name: "Black Bread", shape: "bread", material: "bread", stack: 15, use: "food", food: 45, desc: "Hard, dark, filling. A day's ration." }),
