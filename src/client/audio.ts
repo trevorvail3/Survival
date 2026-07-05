@@ -18,7 +18,7 @@ export type Sfx =
   | "drink" | "search" | "equip" | "click" | "hurt" | "death"
   | "nightfall" | "daybreak" | "lowhp" | "levelup" | "dodge";
 
-export type CreatureVoice = "risen" | "hound" | "wretch" | "revenant" | "graveking" | "prior";
+export type CreatureVoice = "risen" | "hound" | "wretch" | "revenant" | "graveking" | "prior" | "rotmother";
 export type SceneKey = "menu" | "day" | "night";
 
 const VOL_KEY = "ashfall-vol";
@@ -376,6 +376,11 @@ class AudioManager {
           if (kind === "aggro") { this.note({ f: 146.83, dur: 2, peak: 0.34, type: "sawtooth", attack: 0.2, wet: true }); this.note({ f: 155.56, dur: 2, peak: 0.26, type: "sawtooth", attack: 0.25, wet: true }); this.tone({ f0: 73, dur: 2, peak: 0.3, type: "sine", wet: true }); }
           else if (kind === "attack") { this.tone({ f0: 440, f1: 160, dur: 0.3, peak: 0.3, type: "sawtooth", lp: 2200, wet: true }); this.noise({ dur: 0.2, peak: 0.3, lp: 1400 }); }
           else { this.note({ f: 196, dur: 2.4, peak: 0.3, type: "sawtooth", attack: 0.3, wet: true }); this.tone({ f0: 98, f1: 40, dur: 2.4, peak: 0.3, type: "sine", wet: true, delay: 0.1 }); }
+          break;
+        case "rotmother": // the final boss — a vast, wet, subsonic bellow
+          if (kind === "aggro") { this.tone({ f0: 32, dur: 2.8, peak: 0.5, type: "sine", wet: true }); this.tone({ f0: 43, f1: 38, dur: 2.6, peak: 0.4, type: "sawtooth", lp: 260, wet: true }); this.noise({ dur: 1.4, peak: 0.24, lp: 500 }); }
+          else if (kind === "attack") { this.noise({ dur: 0.5, peak: 0.6, lp: 700 }); this.tone({ f0: 80, f1: 28, dur: 0.7, peak: 0.5, type: "sawtooth", lp: 400, wet: true }); }
+          else { this.tone({ f0: 44, f1: 16, dur: 3.4, peak: 0.55, type: "sawtooth", lp: 300, wet: true }); this.noise({ dur: 2.2, peak: 0.3, lp: 600, wet: true, delay: 0.2 }); }
           break;
       }
     } catch { /* ignore */ }

@@ -316,18 +316,20 @@ function drawEnemy(g: CanvasRenderingContext2D, e: Enemy, now: number): void {
     case "revenant": body = "#4a4e54"; head = "#6a707a"; size = 0.44; break;
     case "graveking": body = "#33373e"; head = "#565d66"; size = 0.72; break;
     case "prior": body = "#2c2a34"; head = "#c9c1b6"; size = 0.58; break;
+    case "rotmother": body = "#4a5230"; head = "#6a7038"; size = 1.0; break;
     default: body = "#444"; head = "#666"; size = 0.32;
   }
   if (hurt) body = "#8e2b23";
 
-  // Bosses drag a baleful aura — red for the King, sickly green for the Prior.
+  // Bosses drag a baleful aura — red King, green Prior, putrid Rot-Mother.
   if (e.boss) {
-    const key = e.kind === "prior" ? "prioraura" : "kingaura";
-    const stops: [number, string][] = e.kind === "prior"
-      ? [[0, "rgba(120,150,60,0.4)"], [1, "rgba(120,150,60,0)"]]
-      : [[0, "rgba(180,30,20,0.4)"], [1, "rgba(180,30,20,0)"]];
-    const aura = discSprite(key, 64, stops);
-    const s = R(1.6);
+    const auraCol: Record<string, [number, string][]> = {
+      prior: [[0, "rgba(120,150,60,0.4)"], [1, "rgba(120,150,60,0)"]],
+      rotmother: [[0, "rgba(110,140,40,0.5)"], [1, "rgba(110,140,40,0)"]],
+    };
+    const stops = auraCol[e.kind] ?? [[0, "rgba(180,30,20,0.4)"], [1, "rgba(180,30,20,0)"]];
+    const aura = discSprite(`aura_${e.kind}`, 64, stops);
+    const s = R(e.kind === "rotmother" ? 2.4 : 1.6);
     g.drawImage(aura, -s, -s, s * 2, s * 2);
   }
 
@@ -358,6 +360,13 @@ function drawEnemy(g: CanvasRenderingContext2D, e: Enemy, now: number): void {
     g.closePath(); g.fill();
     g.strokeStyle = "#b9c0c8"; g.lineWidth = R(0.08); g.lineCap = "round";
     g.beginPath(); g.moveTo(R(size * 0.85), R(0.2)); g.lineTo(R(size * 0.85), R(-1.0)); g.stroke();
+  }
+  if (e.kind === "rotmother") {
+    // A bloated, many-eyed horror — pustules and weeping sores.
+    g.fillStyle = "#3a4426";
+    for (let i = 0; i < 5; i++) { const a = i * 1.3 + e.seed; g.beginPath(); g.arc(R(Math.cos(a) * size * 0.6), R(Math.sin(a) * size * 0.6), R(0.16), 0, Math.PI * 2); g.fill(); }
+    g.fillStyle = "#c8d84a";
+    for (let i = 0; i < 6; i++) { const a = i * 1.05 + e.seed; g.beginPath(); g.arc(R(Math.cos(a) * size * 0.5), R(Math.sin(a) * size * 0.5 - 0.3), R(0.05), 0, Math.PI * 2); g.fill(); }
   }
   if (e.kind === "prior") {
     // A pointed cowl and a tall staff crowned with a sickly light.

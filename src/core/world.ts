@@ -71,6 +71,7 @@ export type GameEvent =
   | { t: "build"; id: StructureId; level: number }
   | { t: "recruit" }
   | { t: "levelUp"; level: number }
+  | { t: "victory" }
   | { t: "heal" }
   | { t: "eat" }
   | { t: "drink" }
@@ -272,6 +273,7 @@ export function createWorld(content: Content, rng: () => number): World {
     entry: { ...layout.playerStart },
     homeCache: null,
     bossesSlain: [],
+    won: false,
     onboard: { step: 0, seen: [] },
     timeOfDay: 0.28,
     day: 1,
@@ -319,6 +321,10 @@ export function travelTo(world: World, content: Content, rng: () => number, targ
   } else {
     const def = regionById(targetId);
     if (!def) return false;
+    if (def.requires && !def.requires.every((k) => world.bossesSlain.includes(k))) {
+      out.push({ t: "log", msg: "The way is sealed until the Vale's wardens have fallen." });
+      return false;
+    }
     const layout = generateRegion(rng, def);
     world.map = layout.map; world.props = layout.props; world.ground = [];
     // A boss that has already been slain this run does not return.
@@ -537,6 +543,7 @@ function damageEnemy(world: World, content: Content, ctx: { rng: () => number },
     if (e.boss) {
       if (!world.bossesSlain.includes(e.kind)) world.bossesSlain.push(e.kind);
       out.push({ t: "log", msg: `${content.enemies[e.kind].name} falls. Its hoard is yours.` });
+      if (e.kind === "rotmother" && !world.won) { world.won = true; out.push({ t: "victory" }); }
     }
     grantXp(world, content.enemies[e.kind].bounty * 8 + 5, out);
   } else if (e.state === "idle" || e.state === "wander") {

@@ -44,6 +44,16 @@ export const REGIONS: RegionDef[] = [
     enemyMix: ["wretch", "revenant", "risen"], enemyCount: 16,
     boss: "graveking", mx: 0.80, my: 0.72,
   },
+  {
+    id: "heart",
+    name: "The Plague Heart",
+    blurb: "Where the rot began. The Rot-Mother waits. End her and end the plague.",
+    danger: 4,
+    treeCount: 2, rockCount: 2, herbCount: 4, chests: 3, survivors: 0,
+    enemyMix: ["wretch", "revenant", "wretch"], enemyCount: 14,
+    boss: "rotmother", requires: ["graveking", "prior"], final: true,
+    mx: 0.5, my: 0.12,
+  },
 ];
 
 export function regionById(id: string): RegionDef | undefined {

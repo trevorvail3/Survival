@@ -39,6 +39,8 @@ export function loadGame(): { seed: number; world: World } | null {
     if (typeof pl["invulnUntil"] !== "number") {
       pl["invulnUntil"] = 0; pl["dashUntil"] = 0; pl["dashReadyAt"] = 0; pl["dashDir"] = { x: 1, y: 0 };
     }
+    const w = blob.world as unknown as Record<string, unknown>;
+    if (typeof w["won"] !== "boolean") w["won"] = false;
     return { seed: blob.seed, world: blob.world };
   } catch {
     return null;

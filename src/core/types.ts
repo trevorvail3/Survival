@@ -123,7 +123,7 @@ export interface Recipe {
 // Enemies — the risen dead and plague-beasts
 // ---------------------------------------------------------------------------
 
-export type EnemyKind = "risen" | "hound" | "wretch" | "revenant" | "graveking" | "prior";
+export type EnemyKind = "risen" | "hound" | "wretch" | "revenant" | "graveking" | "prior" | "rotmother";
 
 export interface EnemyDef {
   kind: EnemyKind;
@@ -284,6 +284,10 @@ export interface RegionDef {
   enemyCount: number;
   /** A named boss that guards this region (once-per-run), if any. */
   boss?: EnemyKind;
+  /** Bosses that must be slain before this region can be entered. */
+  requires?: EnemyKind[];
+  /** Slaying this region's boss wins the run. */
+  final?: boolean;
   /** Position on the war map, 0..1 (settlement sits at the centre). */
   mx: number;
   my: number;
@@ -319,6 +323,8 @@ export interface World {
   homeCache: ZoneSnapshot | null;
   /** Named bosses already slain this run — they do not return. */
   bossesSlain: string[];
+  /** Set once the Rot-Mother falls — the run is won (free play continues). */
+  won: boolean;
   /** Onboarding progress (persisted with the run): current step + seen tips. */
   onboard: { step: number; seen: string[] };
   timeOfDay: number;

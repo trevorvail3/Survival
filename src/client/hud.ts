@@ -291,13 +291,21 @@ export class Hud {
     const pins = this.content.regions.map((r) => {
       const px = r.mx * W, py = r.my * H;
       const here = world.zoneId === r.id;
-      const dcol = r.danger >= 3 ? "#c23b2c" : r.danger === 2 ? "#c8922e" : "#7f9a3c";
+      const locked = !!r.requires && !r.requires.every((k) => world.bossesSlain.includes(k));
+      const cleansed = !!r.final && world.won;
+      const dcol = r.danger >= 4 ? "#a24bd6" : r.danger === 3 ? "#c23b2c" : r.danger === 2 ? "#c8922e" : "#7f9a3c";
       const labelLeft = r.mx < 0.5;
-      return `<g data-travel="${r.id}" style="cursor:pointer">
-        <title>${r.name} — ${r.blurb}${r.boss ? " · a boss guards it" : ""}</title>
-        <circle cx="${px}" cy="${py}" r="${here ? 11 : 9}" fill="${here ? "#c8922e" : "#2a2620"}" stroke="${here ? "#fff2cf" : dcol}" stroke-width="2.5"/>
-        <text x="${labelLeft ? px + 15 : px - 15}" y="${py - 2}" text-anchor="${labelLeft ? "start" : "end"}" font-size="13" font-family="Cinzel, serif" fill="#e6dcc4">${r.name}</text>
-        <text x="${labelLeft ? px + 15 : px - 15}" y="${py + 13}" text-anchor="${labelLeft ? "start" : "end"}" font-size="11" fill="${dcol}">${skulls(r.danger)}${here ? "  · here" : ""}</text>
+      const anchor = labelLeft ? "start" : "end";
+      const lx = labelLeft ? px + 15 : px - 15;
+      const fill = locked ? "#1a1712" : here ? "#c8922e" : "#2a2620";
+      const stroke = cleansed ? "#e6b24e" : locked ? "#4a4030" : here ? "#fff2cf" : dcol;
+      const sub = locked ? `<tspan fill="#7a6b4a">sealed</tspan>` : cleansed ? `<tspan fill="#e6b24e">cleansed</tspan>` : `<tspan fill="${dcol}">${skulls(r.danger)}</tspan>${here ? " · here" : ""}`;
+      return `<g data-travel="${r.id}" style="cursor:pointer;opacity:${locked ? 0.7 : 1}">
+        <title>${r.name} — ${locked ? "Slay both the Barrow King and the Pale Prior to unlock." : r.blurb}</title>
+        <circle cx="${px}" cy="${py}" r="${here ? 11 : 9}" fill="${fill}" stroke="${stroke}" stroke-width="2.5"/>
+        ${locked ? `<text x="${px}" y="${py + 4}" text-anchor="middle" font-size="11" fill="#c8922e">🔒</text>` : ""}
+        <text x="${lx}" y="${py - 2}" text-anchor="${anchor}" font-size="13" font-family="Cinzel, serif" fill="#e6dcc4">${r.name}</text>
+        <text x="${lx}" y="${py + 13}" text-anchor="${anchor}" font-size="11">${sub}</text>
       </g>`;
     }).join("");
 
