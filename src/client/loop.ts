@@ -47,6 +47,7 @@ export class Game {
   private viewH = 0;
   private last = 0;
   private raf = 0;
+  private bankTipShown = false;
   private shake = 0;
   private nextHeartbeat = 0;
   private events: GameEvent[] = [];
@@ -282,6 +283,7 @@ export class Game {
       onTogglePack: () => { this.hud.togglePack(); audio.play("click"); this.tut("pack"); },
       onToggleSkills: () => { this.hud.toggleSkills(); audio.play("click"); },
       onTravel: (regionId: string) => {
+        const fromHome = this.world.zoneId === "home";
         const ev: GameEvent[] = [];
         if (travelTo(this.world, this.content, this.rng, regionId, ev)) {
           this.tut("travel");
@@ -291,6 +293,11 @@ export class Game {
           const name = regionId === "home" ? "Your Settlement" : (this.content.regions.find((r) => r.id === regionId)?.name ?? "the wilds");
           this.hud.showBanner(name, regionId === "home" ? "Home again." : "Watch the light.", 1800);
           this.dispatch(ev, performance.now());
+          // Extraction nudge: heading out heavy means a fall costs you the haul.
+          if (regionId !== "home" && fromHome && !this.bankTipShown) {
+            const carried = this.world.player.inv.filter(Boolean).length;
+            if (carried >= 5) { this.hud.tip("Fall out here and you lose your <b>pack</b> — bank your haul at the <b>stash</b> before a risky run."); this.bankTipShown = true; }
+          }
         }
       },
     };
@@ -336,8 +343,13 @@ export class Game {
         case "downed":
           audio.play("death"); audio.setScene("day"); audio.setBossMusic(false);
           this.snapCamera();
-          this.hud.showBanner("Dragged Back", e.dropped > 0 ? `You fell — your pack is lost in the wilds. You wake at the hearth.` : "You fell, and wake at the hearth.", 3200);
-          this.hud.pushLog("You were dragged home. Your carried pack is lost.");
+          if (e.lost) {
+            this.hud.showBanner("Dragged Back", e.dropped > 0 ? `You fell in the wilds — the ${e.dropped} thing${e.dropped === 1 ? "" : "s"} in your pack are lost. Bank your haul next time.` : "You fell in the wilds. You wake at the hearth.", 3600);
+            this.hud.pushLog(e.dropped > 0 ? `Your unbanked pack (${e.dropped}) was lost out there.` : "You were dragged home.");
+          } else {
+            this.hud.showBanner("You Fell", "Your people carried you in. Home held — your pack is safe.", 3000);
+            this.hud.pushLog("You were downed behind the walls, but kept everything.");
+          }
           break;
         case "log": this.hud.pushLog(e.msg); break;
       }

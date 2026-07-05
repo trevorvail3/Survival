@@ -87,7 +87,7 @@ export type GameEvent =
   | { t: "equip" }
   | { t: "dayBreak"; day: number }
   | { t: "nightFall"; day: number }
-  | { t: "downed"; dropped: number }
+  | { t: "downed"; dropped: number; lost: boolean }
   | { t: "log"; msg: string };
 
 // ---------------------------------------------------------------------------
@@ -656,25 +656,32 @@ function attackPlayer(world: World, content: Content, e: Enemy, out: GameEvent[]
 }
 
 /**
- * You don't die for good — your people drag you back to the settlement. You
- * lose the pack you were carrying (but keep what you wield and wear, your
- * level, skills, storage and settlement). A real setback, not a wipe.
+ * You don't die for good — your people drag you back to the settlement. The
+ * extraction stake: fall OUT IN THE WILDS and you lose the unbanked pack you
+ * were carrying (but keep what you wield and wear, your level, skills, whatever
+ * you banked in storage, and the settlement). Fall behind your own walls and
+ * you keep everything — home is safe. Bank your haul before you get greedy.
  */
 function downPlayer(world: World, content: Content, rng: () => number, out: GameEvent[]): void {
   const p = world.player;
-  const dropped = p.inv.filter(Boolean).length;
-  for (let i = 0; i < p.inv.length; i++) p.inv[i] = null;
-  if (p.equipped) addItem(p, content, p.equipped, 1);
-  if (p.armor) addItem(p, content, p.armor, 1);
+  const inField = world.zoneId !== "home";
+  let lost = 0;
+  if (inField) {
+    // The haul you hadn't banked is gone.
+    lost = p.inv.filter(Boolean).length;
+    for (let i = 0; i < p.inv.length; i++) p.inv[i] = null;
+    if (p.equipped) addItem(p, content, p.equipped, 1); // you keep your loadout
+    if (p.armor) addItem(p, content, p.armor, 1);
+  }
   p.hp = Math.max(1, Math.round(p.maxHp * 0.5));
   p.infection = 0;
   p.hunger = Math.max(p.hunger, 25);
   p.thirst = Math.max(p.thirst, 25);
   p.nextAttack = 0; p.dashUntil = 0; p.invulnUntil = 0;
-  if (world.zoneId !== "home") travelTo(world, content, rng, "home", out);
+  if (inField) travelTo(world, content, rng, "home", out);
   else { p.pos = { x: world.entry.x + 0.5, y: world.entry.y + 0.5 }; stop(world); }
   world.timeOfDay = 0.28;
-  out.push({ t: "downed", dropped });
+  out.push({ t: "downed", dropped: lost, lost: inField });
 }
 
 // ---------------------------------------------------------------------------
