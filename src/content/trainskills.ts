@@ -12,8 +12,6 @@
  */
 
 export type SkillId =
-  // combat
-  | "attack" | "strength" | "defence" | "ranged" | "hitpoints"
   // gathering
   | "woodcutting" | "mining" | "fishing"
   // production
@@ -22,13 +20,12 @@ export type SkillId =
   | "construction";
 
 export const SKILL_IDS: SkillId[] = [
-  "attack", "strength", "defence", "ranged", "hitpoints",
   "woodcutting", "mining", "fishing",
   "smithing", "crafting", "herblore", "cooking",
   "construction",
 ];
 
-export type SkillGroup = "Combat" | "Gathering" | "Production" | "Settlement";
+export type SkillGroup = "Gathering" | "Production" | "Settlement";
 
 export interface SkillMeta {
   name: string;
@@ -37,23 +34,20 @@ export interface SkillMeta {
   blurb: string;
 }
 
+// Trainable skills are the OSRS side — gathering and processing only. Combat
+// power comes from GEAR (Power score) and the perk trees, not from XP-by-doing.
 export const SKILL_META: Record<SkillId, SkillMeta> = {
-  attack:       { name: "Attack",       glyph: "sword",     group: "Combat",     blurb: "Melee accuracy — and the arms you may wield." },
-  strength:     { name: "Strength",     glyph: "bolt",      group: "Combat",     blurb: "Raw melee damage." },
-  defence:      { name: "Defence",      glyph: "shield",    group: "Combat",     blurb: "Soaks blows — and gates the armour you may wear." },
-  ranged:       { name: "Ranged",       glyph: "crosshair", group: "Combat",     blurb: "Bow accuracy and draw. Mind your arrows." },
-  hitpoints:    { name: "Hitpoints",    glyph: "heart",     group: "Combat",     blurb: "Your life — grows as you fight." },
   woodcutting:  { name: "Woodcutting",  glyph: "axe",       group: "Gathering",  blurb: "Fell trees for timber. Harder wood needs the level." },
-  mining:       { name: "Mining",       glyph: "pick",      group: "Gathering",  blurb: "Break rock for stone and ore." },
+  mining:       { name: "Mining",       glyph: "pick",      group: "Gathering",  blurb: "Break rock for stone and ore. Deeper lodes need the level." },
   fishing:      { name: "Fishing",      glyph: "fish",      group: "Gathering",  blurb: "Draw food from the cold water." },
-  smithing:     { name: "Smithing",     glyph: "anvil",     group: "Production", blurb: "Smelt ore and forge arms and armour." },
+  smithing:     { name: "Smithing",     glyph: "anvil",     group: "Production", blurb: "Smelt ore and work metal into parts and upgrades." },
   crafting:     { name: "Crafting",     glyph: "wrench",    group: "Production", blurb: "Work hide, cord and fletch arrows." },
   herblore:     { name: "Herblore",     glyph: "leaf",      group: "Production", blurb: "Brew poultices, cures and draughts." },
   cooking:      { name: "Cooking",      glyph: "meat",      group: "Production", blurb: "Cook raw food — safe to eat, and it mends more." },
-  construction: { name: "Construction", glyph: "hammer",    group: "Settlement", blurb: "Raise and upgrade the walls, forge and hall." },
+  construction: { name: "Construction", glyph: "hammer",    group: "Settlement", blurb: "Rebuild the castle — clear ruin, raise walls and workshops." },
 };
 
-export const SKILL_GROUPS: SkillGroup[] = ["Combat", "Gathering", "Production", "Settlement"];
+export const SKILL_GROUPS: SkillGroup[] = ["Gathering", "Production", "Settlement"];
 
 export const MAX_SKILL = 50;
 

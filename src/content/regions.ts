@@ -16,7 +16,7 @@ export const REGIONS: RegionDef[] = [
     blurb: "Sick pine and feverfew under a grey sky. The risen shamble between the boles — few, but they do not tire.",
     danger: 1,
     treeCount: 22, rockCount: 6, herbCount: 16, chests: 3, survivors: 1,
-    enemyMix: ["risen", "risen", "hound"], enemyCount: 12, mx: 0.22, my: 0.30,
+    enemyMix: ["risen", "risen", "hound"], enemyCount: 12, power: 8, mx: 0.22, my: 0.30,
   },
   {
     id: "abbey",
@@ -24,7 +24,7 @@ export const REGIONS: RegionDef[] = [
     blurb: "A burned hall of the old faith. Its wretches still keep a vigil no living soul asked for.",
     danger: 2,
     treeCount: 6, rockCount: 14, herbCount: 6, chests: 8, survivors: 2,
-    enemyMix: ["risen", "wretch", "wretch"], enemyCount: 14,
+    enemyMix: ["risen", "wretch", "wretch"], enemyCount: 14, power: 22,
     boss: "prior", mx: 0.76, my: 0.26,
   },
   {
@@ -33,7 +33,7 @@ export const REGIONS: RegionDef[] = [
     blurb: "Black fen and drowned cairns. Something with too many teeth keeps to the reed-banks.",
     danger: 2,
     treeCount: 10, rockCount: 6, herbCount: 22, chests: 4, survivors: 1,
-    enemyMix: ["hound", "hound", "wretch"], enemyCount: 15, mx: 0.24, my: 0.76,
+    enemyMix: ["hound", "hound", "wretch"], enemyCount: 15, power: 24, mx: 0.24, my: 0.76,
   },
   {
     id: "barrows",
@@ -41,7 +41,7 @@ export const REGIONS: RegionDef[] = [
     blurb: "Nord dead laid down with their iron, and risen to keep it. The richest ore — bought in blood.",
     danger: 3,
     treeCount: 4, rockCount: 24, herbCount: 4, chests: 5, survivors: 1,
-    enemyMix: ["wretch", "revenant", "risen"], enemyCount: 16,
+    enemyMix: ["wretch", "revenant", "risen"], enemyCount: 16, power: 42,
     boss: "graveking", mx: 0.80, my: 0.72,
   },
   {
@@ -50,7 +50,7 @@ export const REGIONS: RegionDef[] = [
     blurb: "Where the plague drew its first breath. The Rot-Mother has not stopped breathing since. End her, and end it all.",
     danger: 4,
     treeCount: 2, rockCount: 2, herbCount: 4, chests: 3, survivors: 0,
-    enemyMix: ["wretch", "revenant", "wretch"], enemyCount: 14,
+    enemyMix: ["wretch", "revenant", "wretch"], enemyCount: 14, power: 68,
     boss: "rotmother", requires: ["graveking", "prior"], final: true,
     mx: 0.5, my: 0.12,
   },

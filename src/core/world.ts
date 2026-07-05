@@ -35,8 +35,9 @@ import { settlementCapacity, SETTLER_NAMES } from "../content/settlement.ts";
 import { pick } from "./rng.ts";
 import { computeMods, nodeUnlocked, SKILLS, xpForNext } from "../content/skills.ts";
 import type { Mods } from "../content/skills.ts";
-import { levelForXp, SKILL_META } from "../content/trainskills.ts";
+import { levelForXp } from "../content/trainskills.ts";
 import type { SkillId } from "../content/trainskills.ts";
+import { weaponDamage, armorSoak, characterPower, rollRarity, rollPower, type Rarity } from "../content/gear.ts";
 
 export const PLAYER_RADIUS = 0.34;
 export const INV_COLS = 6;
@@ -79,6 +80,7 @@ export type GameEvent =
   | { t: "recruit" }
   | { t: "levelUp"; level: number }
   | { t: "skillup"; skill: string; level: number }
+  | { t: "drop"; id: ItemId; rarity: string; power: number }
   | { t: "victory" }
   | { t: "heal" }
   | { t: "eat" }
@@ -199,7 +201,6 @@ export function removeItem(player: Player, id: ItemId, qty: number): boolean {
 
 const BASE_HP = 100;
 const HP_PER_LEVEL = 5;
-const HP_PER_HITPOINT = 4; // each Hitpoints level over 1 adds this to max HP
 
 const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
 
@@ -209,8 +210,7 @@ export function playerMods(player: Player): Mods {
 
 function recomputeMaxHp(player: Player): void {
   const old = player.maxHp;
-  const hpLvl = levelForXp(player.trained["hitpoints"] ?? 0);
-  player.maxHp = BASE_HP + (player.level - 1) * HP_PER_LEVEL + (hpLvl - 1) * HP_PER_HITPOINT + playerMods(player).maxHpBonus;
+  player.maxHp = BASE_HP + (player.level - 1) * HP_PER_LEVEL + playerMods(player).maxHpBonus;
   if (player.maxHp > old) player.hp += player.maxHp - old; // gains apply to current HP too
   if (player.hp > player.maxHp) player.hp = player.maxHp;
 }
@@ -241,24 +241,24 @@ export function grantSkillXp(world: World, id: SkillId, amount: number, out: Gam
   const before = levelForXp(p.trained[id] ?? 0);
   p.trained[id] = (p.trained[id] ?? 0) + Math.round(amount);
   const after = levelForXp(p.trained[id]!);
-  if (after > before) {
-    if (id === "hitpoints") recomputeMaxHp(p); // a tougher body, more life
-    out.push({ t: "skillup", skill: id, level: after });
-  }
+  if (after > before) out.push({ t: "skillup", skill: id, level: after });
 }
 
-/** Award combat XP for a kill, split by the style used (weapon kind). */
-function grantCombatXp(world: World, content: Content, base: number, out: GameEvent[]): void {
-  const wk = world.player.equipped ? content.items[world.player.equipped]?.weapon?.kind : undefined;
-  if (wk === "bow") {
-    grantSkillXp(world, "ranged", base, out);
-    grantSkillXp(world, "hitpoints", base * 0.5, out);
-  } else {
-    grantSkillXp(world, "attack", base * 0.5, out);
-    grantSkillXp(world, "strength", base * 0.5, out);
-    grantSkillXp(world, "defence", base * 0.35, out);
-    grantSkillXp(world, "hitpoints", base * 0.5, out);
-  }
+/** Character Power (gear score) — the Destiny-style striving number. */
+export function playerPower(world: World): number {
+  return characterPower(world.player.equipped, world.player.armor);
+}
+
+/** The recommended Power of the zone you're in (0 at the safe home base). */
+export function regionRecommendedPower(world: World): number {
+  return world.zoneId === "home" ? 0 : regionById(world.zoneId)?.power ?? 0;
+}
+
+/** Destiny-style over/under-Power scaling: how much damage you deal and take,
+ *  from the gap between your Power and the region's recommended Power. */
+function combatFactors(world: World): { deal: number; take: number } {
+  const delta = playerPower(world) - regionRecommendedPower(world);
+  return { deal: clamp(1 + delta * 0.02, 0.45, 1.9), take: clamp(1 - delta * 0.02, 0.5, 2.1) };
 }
 
 export function canSpendSkill(world: World, nodeId: string): boolean {
@@ -311,7 +311,7 @@ export function createWorld(content: Content, rng: () => number): World {
     path: [],
     order: { type: "none" },
     inv,
-    equipped: "rusty_sword",
+    equipped: { id: "rusty_sword", qty: 1 },
     armor: null,
     nextAttack: 0,
     infection: 0,
@@ -529,8 +529,8 @@ function advancePlayer(world: World, content: Content, ctx: { rng: () => number 
   if (order.type === "attack") {
     const e = world.enemies.find((x) => x.id === order.enemyId);
     if (!e || e.state === "dead") { stop(world); return; }
-    const def = p.equipped ? content.items[p.equipped] : content.items["fists"];
-    const wep = def?.weapon ?? content.items["fists"]!.weapon!;
+    const def = (p.equipped ? content.items[p.equipped.id] : undefined) ?? content.items["fists"]!;
+    const wep = def.weapon ?? content.items["fists"]!.weapon!;
     const dx = e.pos.x - p.pos.x, dy = e.pos.y - p.pos.y;
     const dist = Math.hypot(dx, dy);
     p.facing = Math.atan2(dy, dx);
@@ -572,8 +572,8 @@ function advancePlayer(world: World, content: Content, ctx: { rng: () => number 
 
 function attackTarget(world: World, content: Content, ctx: { rng: () => number }, e: Enemy, out: GameEvent[]): void {
   const p = world.player;
-  const def = p.equipped ? content.items[p.equipped] : content.items["fists"];
-  const wep = def?.weapon ?? content.items["fists"]!.weapon!;
+  const def = (p.equipped ? content.items[p.equipped.id] : undefined) ?? content.items["fists"]!;
+  const wep = def.weapon ?? content.items["fists"]!.weapon!;
   if (wep.kind === "bow") {
     if (countItem(p, wep.ammo!) <= 0) { out.push({ t: "noammo" }); return; }
     removeItem(p, wep.ammo!, 1);
@@ -583,18 +583,12 @@ function attackTarget(world: World, content: Content, ctx: { rng: () => number }
   }
   const eDef = content.enemies[e.kind];
   const m = playerMods(p);
-  const ranged = wep.kind === "bow";
-  // Accuracy: your combat level in this style vs the foe's armour. Never a
-  // sure thing, never hopeless — OSRS-style roll, so misses happen.
-  const acc = ranged ? skillLevel(world, "ranged") : skillLevel(world, "attack");
-  const hitChance = clamp((acc + 10) / (acc + 10 + eDef.armor * 1.6), 0.4, 0.97);
-  if (ctx.rng() > hitChance) { out.push({ t: "miss", x: e.pos.x, y: e.pos.y }); return; }
-  // Power: Strength drives melee max hit, Ranged drives the bow.
-  const powLvl = ranged ? skillLevel(world, "ranged") : skillLevel(world, "strength");
-  const powMult = 1 + powLvl * 0.028; // level 50 ~ +140%
+  const f = combatFactors(world);
+  // Damage comes from GEAR (weapon Power × rarity) and perks — not combat XP —
+  // then scaled by how your Power compares to the region's recommended Power.
   const crit = ctx.rng() < m.critChance;
   const berserk = p.hp / p.maxHp < 0.4 ? 1 + m.lowHpDmg : 1; // Berserker
-  let dmg = Math.round(wep.damage * m.meleeMult * powMult * berserk * (0.85 + ctx.rng() * 0.3) * (crit ? 1.8 : 1));
+  let dmg = Math.round(weaponDamage(def, p.equipped) * m.meleeMult * berserk * f.deal * (0.85 + ctx.rng() * 0.3) * (crit ? 1.8 : 1));
   dmg = Math.max(1, dmg - Math.max(0, eDef.armor - m.armorPen));
   damageEnemy(world, content, ctx, e, dmg, crit, out);
   // Knockback + brief stagger on solid hits.
@@ -622,13 +616,15 @@ function damageEnemy(world: World, content: Content, ctx: { rng: () => number },
     out.push({ t: "kill", kind: e.kind, x: e.pos.x, y: e.pos.y });
     const table = e.boss ? `kill_${e.kind}` : e.kind === "revenant" ? "kill_revenant" : "kill_common";
     for (const d of rollLoot(ctx.rng, table)) spawnGround(world, d.id, d.qty, e.pos.x, e.pos.y);
+    // Destiny-style gear: bosses always drop, tougher foes sometimes.
+    const gearDrops = e.boss ? 2 : ctx.rng() < 0.04 + content.enemies[e.kind].bounty * 0.012 ? 1 : 0;
+    for (let i = 0; i < gearDrops; i++) spawnGearDrop(world, content, ctx, e.pos.x, e.pos.y, out);
     if (e.boss) {
       if (!world.bossesSlain.includes(e.kind)) world.bossesSlain.push(e.kind);
       out.push({ t: "log", msg: `${content.enemies[e.kind].name} falls. Its hoard is yours.` });
       if (e.kind === "rotmother" && !world.won) { world.won = true; out.push({ t: "victory" }); }
     }
     grantXp(world, content.enemies[e.kind].bounty * 8 + 5, out);
-    grantCombatXp(world, content, content.enemies[e.kind].bounty * 6 + 8, out);
   } else if (e.state === "idle" || e.state === "wander") {
     e.state = "hunt";
     out.push({ t: "aggro", kind: e.kind });
@@ -639,16 +635,39 @@ function spawnGround(world: World, id: ItemId, qty: number, x: number, y: number
   world.ground.push({ id: world.nextId++, item: { id, qty }, pos: { x: x + (world.nextId % 5) * 0.05 - 0.12, y: y + (world.nextId % 3) * 0.05 } });
 }
 
+let gearPoolCache: ItemId[] | null = null;
+function gearPool(content: Content): ItemId[] {
+  if (!gearPoolCache) {
+    gearPoolCache = Object.values(content.items)
+      .filter((i) => i.id !== "fists" && (i.slot === "body" || (i.slot === "weapon" && !!i.weapon)))
+      .map((i) => i.id);
+  }
+  return gearPoolCache;
+}
+
+/** Drop a rolled gear instance (rarity + Power) around the region's power band. */
+function spawnGearDrop(world: World, content: Content, ctx: { rng: () => number }, x: number, y: number, out: GameEvent[]): void {
+  const pool = gearPool(content);
+  if (pool.length === 0) return;
+  const id = pick(ctx.rng, pool);
+  const danger = world.zoneId === "home" ? 1 : regionById(world.zoneId)?.danger ?? 1;
+  const rarity: Rarity = rollRarity(ctx.rng, danger);
+  const band = regionRecommendedPower(world) || 6;
+  const power = rollPower(ctx.rng, band, rarity);
+  world.ground.push({ id: world.nextId++, item: { id, qty: 1, power, rarity }, pos: { x: x + (world.nextId % 5) * 0.05 - 0.12, y: y + (world.nextId % 3) * 0.05 } });
+  out.push({ t: "drop", id, rarity, power });
+}
+
 function attackPlayer(world: World, content: Content, e: Enemy, out: GameEvent[]): void {
   const p = world.player;
   if (world.clock < p.invulnUntil) return; // dodged — no damage
   const eDef = content.enemies[e.kind];
-  const defL = skillLevel(world, "defence");
-  // Defence turns some blows aside outright (capped), and softens the rest.
-  if (Math.random() < clamp(defL * 0.006, 0, 0.35)) { out.push({ t: "miss", x: p.pos.x, y: p.pos.y }); return; }
-  const armorVal = p.armor ? content.items[p.armor]?.armor ?? 0 : 0;
-  const defSoak = Math.floor(defL * 0.35);
-  const dmg = Math.max(1, Math.round(eDef.damage * (0.9 + Math.random() * 0.2)) - armorVal - defSoak - playerMods(p).dmgReduce);
+  // Mitigation comes from your equipped armour (its Power × rarity) and perks;
+  // the region's Power gap scales incoming damage (under-Power hurts).
+  const bodyDef = p.armor ? content.items[p.armor.id] : undefined;
+  const armorVal = bodyDef ? armorSoak(bodyDef, p.armor) : 0;
+  const take = combatFactors(world).take;
+  const dmg = Math.max(1, Math.round(eDef.damage * take * (0.9 + Math.random() * 0.2)) - armorVal - playerMods(p).dmgReduce);
   p.hp -= dmg;
   out.push({ t: "playerHurt", dmg });
   const infect = (e.kind === "revenant" ? 8 : e.kind === "wretch" ? 12 : e.boss ? 10 : 6) * playerMods(p).infectionMult;
@@ -667,11 +686,10 @@ function downPlayer(world: World, content: Content, rng: () => number, out: Game
   const inField = world.zoneId !== "home";
   let lost = 0;
   if (inField) {
-    // The haul you hadn't banked is gone.
+    // The haul you hadn't banked is gone. Your equipped loadout is separate
+    // from the pack, so it survives automatically.
     lost = p.inv.filter(Boolean).length;
     for (let i = 0; i < p.inv.length; i++) p.inv[i] = null;
-    if (p.equipped) addItem(p, content, p.equipped, 1); // you keep your loadout
-    if (p.armor) addItem(p, content, p.armor, 1);
   }
   p.hp = Math.max(1, Math.round(p.maxHp * 0.5));
   p.infection = 0;
@@ -776,6 +794,13 @@ export function restAtHearth(world: World, content: Content, rng: () => number, 
 // Using items
 // ---------------------------------------------------------------------------
 
+/** Put a unique gear instance into the first empty pack slot, else drop it. */
+function placeInstance(world: World, inst: InvSlot): void {
+  const i = world.player.inv.findIndex((s) => !s);
+  if (i >= 0) world.player.inv[i] = inst;
+  else world.ground.push({ id: world.nextId++, item: inst, pos: { ...world.player.pos } });
+}
+
 export function useSlot(world: World, content: Content, slotIndex: number, out: GameEvent[]): void {
   const p = world.player;
   const slot = p.inv[slotIndex];
@@ -791,16 +816,20 @@ export function useSlot(world: World, content: Content, slotIndex: number, out: 
       p.infection = Math.max(0, p.infection - (def.cure ?? 0));
       if (def.heal) p.hp = Math.min(p.maxHp, p.hp + def.heal * heal);
       removeItem(p, slot.id, 1); out.push({ t: "cure" }); break;
-    case "equip":
-      if (def.reqLevel && def.reqSkill && skillLevel(world, def.reqSkill as SkillId) < def.reqLevel) {
-        const sk = SKILL_META[def.reqSkill as SkillId]?.name ?? def.reqSkill;
-        out.push({ t: "log", msg: `You need ${sk} ${def.reqLevel} to use the ${def.name}.` });
-        break;
-      }
-      if (def.slot === "body") p.armor = def.id;
-      else p.equipped = def.id;
+    case "equip": {
+      if (def.slot !== "body" && !def.weapon) break;
+      const isBody = def.slot === "body";
+      const prev = isBody ? p.armor : p.equipped;
+      // Move the pack instance into the equip slot (gear is unique, qty 1).
+      const inst: InvSlot = { id: slot.id, qty: 1 };
+      if (slot.power !== undefined) inst.power = slot.power;
+      if (slot.rarity !== undefined) inst.rarity = slot.rarity;
+      p.inv[slotIndex] = null;
+      if (isBody) p.armor = inst; else p.equipped = inst;
+      if (prev) placeInstance(world, prev); // return the old gear to the pack
       out.push({ t: "equip" });
       break;
+    }
     default: break;
   }
 }

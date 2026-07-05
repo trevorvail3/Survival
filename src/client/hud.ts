@@ -8,13 +8,14 @@
  * are procedural (glyphs + item icons).
  */
 
-import type { Content, InvSlot, ItemId, SettlerRole, StructureId, World } from "../core/types.ts";
+import type { Content, InvSlot, ItemDef, ItemId, SettlerRole, StructureId, World } from "../core/types.ts";
 import { SETTLER_ROLES } from "../core/types.ts";
 import { glyph } from "./glyph.ts";
 import { itemIconSVG } from "./itemIcon.ts";
 import { canBuild, canCraft, canSpendSkill, capacity, idleSettlers, INV_COLS, isNight } from "../core/world.ts";
 import { SKILLS, TREE_NAMES, pointsInTree, xpForNext, nodeUnlocked, type SkillTree } from "../content/skills.ts";
 import { SKILL_META, SKILL_GROUPS, SKILL_IDS, MAX_SKILL, levelForXp, levelProgress, type SkillId } from "../content/trainskills.ts";
+import { RARITY_META, rarityOf, slotPower, characterPower, weaponDamage, armorSoak } from "../content/gear.ts";
 import { audio } from "./audio.ts";
 
 export interface HudHandlers {
@@ -230,6 +231,10 @@ export class Hud {
         <span style="font-family:'Cinzel',serif;font-size:12px;color:var(--amber);white-space:nowrap">Lv ${p.level}</span>
         <div style="flex:1;height:6px;background:#0c0d0e;border:1px solid #26282a;border-radius:2px;overflow:hidden"><div style="width:${xpPct}%;height:100%;background:#6a5aa0"></div></div>
         ${p.points > 0 ? `<span style="font-size:11px;color:var(--amber);white-space:nowrap">+${p.points} pt${p.points > 1 ? "s" : ""}</span>` : ""}
+      </div>` +
+      `<div style="display:flex;align-items:center;gap:6px;margin-top:5px;font-size:12px">
+        <span style="color:var(--amber);font-family:'Cinzel',serif">◈ Power ${characterPower(p.equipped, p.armor)}</span>
+        ${world.zoneId !== "home" ? `<span style="color:var(--ink-dim);font-size:11px">/ rec. ${this.content.regions.find((r) => r.id === world.zoneId)?.power ?? 0}</span>` : ""}
       </div>`;
 
     const night = isNight(world.timeOfDay);
@@ -407,6 +412,7 @@ export class Hud {
     }).join("");
 
     // Region pins.
+    const myPow = characterPower(world.player.equipped, world.player.armor);
     const pins = this.content.regions.map((r) => {
       const px = r.mx * W, py = r.my * H;
       const here = world.zoneId === r.id;
@@ -418,7 +424,9 @@ export class Hud {
       const lx = labelLeft ? px + 15 : px - 15;
       const fill = locked ? "#1a1712" : here ? "#c8922e" : "#2a2620";
       const stroke = cleansed ? "#e6b24e" : locked ? "#4a4030" : here ? "#fff2cf" : dcol;
-      const sub = locked ? `<tspan fill="#7a6b4a">sealed</tspan>` : cleansed ? `<tspan fill="#e6b24e">cleansed</tspan>` : `<tspan fill="${dcol}">${skulls(r.danger)}</tspan>${here ? " · here" : ""}`;
+      const powCol = myPow >= r.power ? "#7f9a3c" : myPow >= r.power - 8 ? "#c8922e" : "#c23b2c";
+      const powTag = locked || cleansed ? "" : ` <tspan fill="${powCol}">◈${r.power}</tspan>`;
+      const sub = locked ? `<tspan fill="#7a6b4a">sealed</tspan>` : cleansed ? `<tspan fill="#e6b24e">cleansed</tspan>` : `<tspan fill="${dcol}">${skulls(r.danger)}</tspan>${powTag}${here ? " · here" : ""}`;
       return `<g data-travel="${r.id}" style="cursor:pointer;opacity:${locked ? 0.7 : 1}">
         <title>${r.name} — ${locked ? "Slay both the Barrow King and the Pale Prior to unlock." : r.blurb}</title>
         <circle cx="${px}" cy="${py}" r="${here ? 11 : 9}" fill="${fill}" stroke="${stroke}" stroke-width="2.5"/>
@@ -452,11 +460,29 @@ export class Hud {
     const slots = p.inv.map((s, i) => {
       if (!s) return `<div class="slot empty"></div>`;
       const def = this.content.items[s.id]!;
-      const on = p.equipped === s.id || p.armor === s.id;
-      return `<div class="slot" data-slot="${i}" title="${def.name} — ${def.desc}" style="${on ? "border-color:var(--amber)" : ""}">
-        <div class="ic">${itemIconSVG(def)}</div>${s.qty > 1 ? `<span class="q">${s.qty}</span>` : ""}${def.weapon || def.slot === "body" ? `<span class="e">${on ? "✓" : ""}</span>` : ""}
+      const gear = !!(def.weapon || def.slot === "body");
+      const col = gear ? RARITY_META[rarityOf(s)].color : "#26282a";
+      const pw = gear ? `<span class="e" style="color:${col}">◈${slotPower(s)}</span>` : "";
+      return `<div class="slot" data-slot="${i}" title="${gearTip(def, s)}" style="border-color:${col}">
+        <div class="ic">${itemIconSVG(def)}</div>${s.qty > 1 ? `<span class="q">${s.qty}</span>` : ""}${pw}
       </div>`;
     }).join("");
+
+    // Loadout: equipped weapon + body with rarity + Power, and your gear score.
+    const loadoutCell = (slot: typeof p.equipped, fallback: string): string => {
+      if (!slot) return `<div style="flex:1;color:var(--ink-dim);font-size:12px;padding:6px 8px">— ${fallback} —</div>`;
+      const def = this.content.items[slot.id]!;
+      const col = RARITY_META[rarityOf(slot)].color;
+      return `<div style="flex:1;display:flex;align-items:center;gap:8px;padding:5px 7px;background:#101112;border:1px solid ${col};border-radius:3px">
+        <div style="width:30px;height:30px">${itemIconSVG(def)}</div>
+        <div style="min-width:0"><div style="color:${col};font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${RARITY_META[rarityOf(slot)].name} ${def.name}</div>
+        <div style="font-size:11px;color:var(--ink-dim)">◈ Power ${slotPower(slot)}</div></div>
+      </div>`;
+    };
+    const power = characterPower(p.equipped, p.armor);
+    const loadout =
+      `<div class="hud-heading">Loadout <span style="color:var(--amber);text-transform:none;letter-spacing:0">· ◈ Power ${power}</span></div>
+       <div style="display:flex;gap:8px;margin-bottom:12px">${loadoutCell(p.equipped, "no weapon")}${loadoutCell(p.armor, "no armour")}</div>`;
 
     const s = world.settlement.structures;
     const recipes = this.content.recipes.map((r) => {
@@ -482,20 +508,14 @@ export class Hud {
         .slot .q{position:absolute;bottom:1px;right:3px;font-size:11px}.slot .e{position:absolute;top:1px;right:3px;font-size:11px;color:var(--amber)}
         .recipe{display:flex;align-items:center;gap:10px;padding:6px;border-bottom:1px solid #1c1e20}
       </style>
+      ${loadout}
       <div class="hud-heading">The Pack</div>
       <div id="hud-pack-grid">${slots}</div>
       <div class="hud-heading">Craft</div>${recipes}
       <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--ink-dim)">[Tab] close · click a weapon or armour to equip · click an item to use</div>`;
 
     this.pack.querySelectorAll<HTMLElement>(".slot[data-slot]").forEach((el) => {
-      el.onclick = () => {
-        const i = Number(el.dataset["slot"]);
-        const slot = world.player.inv[i];
-        if (!slot) return;
-        const def = this.content.items[slot.id]!;
-        if (def.weapon || def.slot === "body") this.handlers.onEquip(slot.id);
-        else this.handlers.onUseSlot(i);
-      };
+      el.onclick = () => this.handlers.onUseSlot(Number(el.dataset["slot"])); // useSlot equips gear, uses consumables
     });
     this.pack.querySelectorAll<HTMLElement>(".recipe").forEach((el) => {
       const btn = el.querySelector("button");
@@ -566,4 +586,10 @@ function count(world: World, id: ItemId): number {
 }
 function ico(name: string): string {
   return `<span style="width:16px;height:16px;display:inline-block;color:var(--ink)">${glyph(name)}</span>`;
+}
+/** Tooltip for a slot — gear shows its rarity, Power and stats. */
+function gearTip(def: ItemDef, s: InvSlot): string {
+  if (!(def.weapon || def.slot === "body")) return `${def.name} — ${def.desc}`;
+  const stat = def.weapon ? `Dmg ${weaponDamage(def, s)}` : `Armour ${armorSoak(def, s)}`;
+  return `${RARITY_META[rarityOf(s)].name} ${def.name} · ◈Power ${slotPower(s)} · ${stat} — ${def.desc}`;
 }

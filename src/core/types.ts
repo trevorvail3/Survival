@@ -109,6 +109,10 @@ export interface WeaponDef {
 export interface InvSlot {
   id: ItemId;
   qty: number;
+  /** Gear instances (Destiny-style): a dropped weapon/armour carries its own
+   *  rolled Power and rarity. Absent on plain stackable resources. */
+  power?: number;
+  rarity?: string; // Rarity from content/gear.ts
 }
 
 export interface Recipe {
@@ -228,8 +232,8 @@ export interface Player {
   path: Vec2[];
   order: PlayerOrder;
   inv: (InvSlot | null)[]; // the pack you carry (lost if you fall)
-  equipped: ItemId | null; // weapon
-  armor: ItemId | null; // body armour
+  equipped: InvSlot | null; // equipped weapon instance (rolled Power/rarity)
+  armor: InvSlot | null; // equipped body armour instance
   nextAttack: number;
   infection: number;
   alive: boolean;
@@ -299,6 +303,9 @@ export interface RegionDef {
   survivors: number;
   enemyMix: EnemyKind[]; // repeat a kind to weight it
   enemyCount: number;
+  /** Recommended Power (Destiny-style). Under it, foes hit harder; over it,
+   *  you dominate. Also the band around which this region's loot Power rolls. */
+  power: number;
   /** A named boss that guards this region (once-per-run), if any. */
   boss?: EnemyKind;
   /** Bosses that must be slain before this region can be entered. */

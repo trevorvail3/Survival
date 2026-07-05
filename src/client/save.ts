@@ -40,6 +40,9 @@ export function loadGame(): { seed: number; world: World } | null {
       pl["invulnUntil"] = 0; pl["dashUntil"] = 0; pl["dashReadyAt"] = 0; pl["dashDir"] = { x: 1, y: 0 };
     }
     if (typeof pl["trained"] !== "object" || pl["trained"] === null) pl["trained"] = {};
+    // equipped/armor became gear instances (were bare item ids).
+    if (typeof pl["equipped"] === "string") pl["equipped"] = { id: pl["equipped"], qty: 1 };
+    if (typeof pl["armor"] === "string") pl["armor"] = { id: pl["armor"], qty: 1 };
     const w = blob.world as unknown as Record<string, unknown>;
     if (typeof w["won"] !== "boolean") w["won"] = false;
     if (!Array.isArray(w["stash"])) w["stash"] = new Array(48).fill(null);

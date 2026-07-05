@@ -35,6 +35,7 @@ import { Fx } from "./fx.ts";
 import { Input } from "./input.ts";
 import { Hud, HOTBAR } from "./hud.ts";
 import { SKILL_META, type SkillId } from "../content/trainskills.ts";
+import { RARITY_META, type Rarity } from "../content/gear.ts";
 import { audio, type SceneKey } from "./audio.ts";
 import { saveGame } from "./save.ts";
 import { Tutorial } from "./onboarding.ts";
@@ -347,6 +348,12 @@ export class Game {
         case "recruit": audio.play("recruit"); this.tut("rescue"); break;
         case "levelUp": audio.play("levelup"); this.hud.showBanner(`Level ${e.level}`, "A skill point earned — press C.", 2000); this.hud.pushLog(`You reach level ${e.level}.`); break;
         case "skillup": { const m = SKILL_META[e.skill as SkillId]; audio.play("click"); this.hud.tip(`<b>${m?.name ?? e.skill}</b> level ${e.level}`); this.hud.pushLog(`${m?.name ?? e.skill} advanced to ${e.level}.`); break; }
+        case "drop": {
+          const rm = RARITY_META[e.rarity as Rarity]; const nm = this.content.items[e.id]?.name ?? e.id;
+          this.hud.pushLog(`Dropped: <span style="color:${rm?.color ?? "#ccc"}">${rm?.name ?? ""} ${nm}</span> ◈${e.power}`);
+          if (e.rarity === "epic" || e.rarity === "legendary") { audio.play("levelup"); this.hud.tip(`<span style="color:${rm.color}">${rm.name}</span> drop — <b>${nm}</b> ◈${e.power}`); }
+          break;
+        }
         case "victory": audio.play("levelup"); audio.play("daybreak"); this.hud.showBanner("The Hold is Cleansed", "The Rot-Mother is dead. The plague ends with you.", 6000); this.hud.pushLog("You have won. The Hold is free — range on if you wish."); break;
         case "heal": audio.play("heal"); break;
         case "eat": audio.play("eat"); break;
