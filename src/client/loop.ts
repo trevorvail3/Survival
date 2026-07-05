@@ -29,11 +29,12 @@ import {
   useSlot,
   type GameEvent,
 } from "../core/world.ts";
+import { isNight } from "../core/world.ts";
 import { drawLighting, drawWorld, TILE, type Camera } from "./render.ts";
 import { Fx } from "./fx.ts";
 import { Input } from "./input.ts";
 import { Hud, HOTBAR } from "./hud.ts";
-import { audio } from "./audio.ts";
+import { audio, type SceneKey } from "./audio.ts";
 import { saveGame } from "./save.ts";
 import { Tutorial } from "./onboarding.ts";
 
@@ -141,6 +142,9 @@ export class Game {
 
     // --- Low-HP heartbeat ---
     if (p.alive && p.hp / p.maxHp < 0.3 && now > this.nextHeartbeat) { audio.play("lowhp"); this.nextHeartbeat = now + 1100; }
+
+    // --- Boss battle music while a boss hunts ---
+    audio.setBossMusic(world.enemies.some((en) => en.boss && (en.state === "hunt" || en.state === "attack")));
 
     // --- Camera ---
     const tx = p.pos.x * TILE - this.viewW / this.zoom / 2, ty = p.pos.y * TILE - this.viewH / this.zoom / 2;
@@ -271,6 +275,7 @@ export class Game {
           this.tut("travel");
           this.hud.closeAll();
           this.snapCamera();
+          audio.setScene(regionId === "home" ? (isNight(this.world.timeOfDay) ? "night" : "day") : (regionId as SceneKey));
           const name = regionId === "home" ? "Your Settlement" : (this.content.regions.find((r) => r.id === regionId)?.name ?? "the wilds");
           this.hud.showBanner(name, regionId === "home" ? "Home again." : "Watch the light.", 1800);
           this.dispatch(ev, performance.now());
@@ -312,10 +317,10 @@ export class Game {
         case "drink": audio.play("drink"); break;
         case "cure": audio.play("heal"); this.hud.pushLog("The fever recedes."); break;
         case "equip": audio.play("equip"); break;
-        case "dayBreak": audio.play("daybreak"); audio.setScene("day"); this.hud.showBanner(`Day ${e.day}`, "You saw the dawn.", 2200); break;
-        case "nightFall": audio.play("nightfall"); audio.setScene("night"); this.hud.showBanner("Nightfall", "The dead walk. Hold your walls.", 2200); this.tut("night"); break;
+        case "dayBreak": audio.play("daybreak"); if (this.world.zoneId === "home") audio.setScene("day"); this.hud.showBanner(`Day ${e.day}`, "You saw the dawn.", 2200); break;
+        case "nightFall": audio.play("nightfall"); if (this.world.zoneId === "home") audio.setScene("night"); this.hud.showBanner("Nightfall", "The dead walk. Hold your walls.", 2200); this.tut("night"); break;
         case "downed":
-          audio.play("death"); audio.setScene("day");
+          audio.play("death"); audio.setScene("day"); audio.setBossMusic(false);
           this.snapCamera();
           this.hud.showBanner("Dragged Back", e.dropped > 0 ? `You fell — your pack is lost in the wilds. You wake at the hearth.` : "You fell, and wake at the hearth.", 3200);
           this.hud.pushLog("You were dragged home. Your carried pack is lost.");

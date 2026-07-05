@@ -511,6 +511,12 @@ export function drawWorld(
 let lightCanvas: HTMLCanvasElement | null = null;
 let lightCtx: CanvasRenderingContext2D | null = null;
 
+// Per-region colour grade — a subtle multiply wash so each place reads with its
+// own palette even before you notice the terrain. Home has no tint (neutral).
+const REGION_TINT: Record<string, string> = {
+  woods: "#b6cf9e", abbey: "#b2bccb", mire: "#c2c88c", barrows: "#a6afc6", heart: "#aec27e",
+};
+
 export function drawLighting(
   g: CanvasRenderingContext2D, world: World, cam: Camera,
   viewW: number, viewH: number, zoom: number,
@@ -552,6 +558,16 @@ export function drawLighting(
   }
   lc.globalCompositeOperation = "source-over";
   g.drawImage(lightCanvas, 0, 0);
+
+  const tint = REGION_TINT[world.zoneId];
+  if (tint) {
+    g.save();
+    g.globalCompositeOperation = "multiply";
+    g.globalAlpha = 0.5 + veil * 0.2;
+    g.fillStyle = tint;
+    g.fillRect(0, 0, viewW, viewH);
+    g.restore();
+  }
 
   g.save();
   g.globalCompositeOperation = "lighter";

@@ -19,7 +19,7 @@ export type Sfx =
   | "nightfall" | "daybreak" | "lowhp" | "levelup" | "dodge";
 
 export type CreatureVoice = "risen" | "hound" | "wretch" | "revenant" | "graveking" | "prior" | "rotmother";
-export type SceneKey = "menu" | "day" | "night";
+export type SceneKey = "menu" | "day" | "night" | "woods" | "abbey" | "mire" | "barrows" | "heart";
 
 const VOL_KEY = "ashfall-vol";
 const MUTE_KEY = "ashfall-mute";
@@ -46,6 +46,8 @@ class AudioManager {
   private sceneNodes: AudioNode[] = [];
   private sceneTimers: number[] = [];
   private tensionUntil = 0;
+  private bossOn = false;
+  private bossTimer = 0;
 
   constructor() {
     if (typeof window === "undefined") return;
@@ -436,27 +438,82 @@ class AudioManager {
       this.every(9000, 16000, () => this.note({ f: 55, dur: 4, peak: 0.16, type: "sawtooth", attack: 1.2, wet: true }));
       return;
     }
-    // Wind bed shared by day + night.
+    if (key === "woods") {
+      // Airy wind through timber; birds and rustling leaves.
+      this.sceneNodes.push(...this.noiseBed(0.11, 2200, 500, { rate: 0.16, depth: 900, target: "lp" }));
+      this.sceneNodes.push(...this.drone(58, 0.08, "sine"));
+      this.every(5000, 12000, () => { for (let i = 0; i < 3; i++) this.tone({ f0: 1600 + Math.random() * 800, f1: 1400, dur: 0.08, peak: 0.04, type: "sine", wet: true, delay: i * 0.12 }); });
+      this.every(7000, 15000, () => this.noise({ dur: 0.5, peak: 0.06, hp: 1500, lp: 6000 })); // rustle
+      return;
+    }
+    if (key === "abbey") {
+      // Cold stone: a reverberant drone and a distant, cracked bell.
+      this.sceneNodes.push(...this.drone(49, 0.22, "sawtooth"));
+      this.sceneNodes.push(...this.drone(65.4, 0.12, "sine"));
+      this.sceneNodes.push(...this.noiseBed(0.05, 600, 150, { rate: 0.06, depth: 300, target: "lp" }));
+      this.every(10000, 20000, () => { this.tone({ f0: 155, f1: 150, dur: 3, peak: 0.08, type: "triangle", wet: true }); this.tone({ f0: 233, f1: 226, dur: 3, peak: 0.05, type: "sine", wet: true }); });
+      return;
+    }
+    if (key === "mire") {
+      // Sodden murk: drips, bubbles, a low wet drone and frogs.
+      this.sceneNodes.push(...this.drone(43, 0.18, "sine"));
+      this.sceneNodes.push(...this.noiseBed(0.06, 500, null, { rate: 0.1, depth: 200, target: "lp" }));
+      this.every(2500, 6000, () => this.tone({ f0: 1200 + Math.random() * 700, f1: 400, dur: 0.14, peak: 0.06, type: "sine", wet: true })); // drip
+      this.every(4000, 9000, () => this.tone({ f0: 90 + Math.random() * 30, f1: 70, dur: 0.3, peak: 0.06, type: "sawtooth", lp: 500 })); // frog / bubble
+      return;
+    }
+    if (key === "barrows") {
+      // Deep cavern: a very low drone, metal creaks and a distant knell.
+      this.sceneNodes.push(...this.drone(36, 0.28, "sawtooth"));
+      this.sceneNodes.push(...this.drone(38, 0.16, "sawtooth"));
+      this.every(8000, 16000, () => this.tone({ f0: 260 + Math.random() * 120, f1: 240, dur: 1.6, peak: 0.06, type: "sawtooth", lp: 1200, wet: true })); // metal creak
+      this.every(12000, 24000, () => this.tone({ f0: 82, f1: 78, dur: 2.4, peak: 0.09, type: "sine", wet: true })); // knell
+      return;
+    }
+    if (key === "heart") {
+      // The source of the rot: an oppressive subsonic throb and wet groans.
+      this.sceneNodes.push(...this.drone(30, 0.34, "sine"));
+      this.sceneNodes.push(...this.drone(41, 0.16, "sawtooth"));
+      this.sceneNodes.push(...this.noiseBed(0.07, 500, null, { rate: 0.5, depth: 250, target: "gain" }));
+      this.every(4000, 9000, () => this.tone({ f0: 120 + Math.random() * 40, f1: 50, dur: 1.6, peak: 0.08, type: "sawtooth", lp: 700, wet: true }));
+      return;
+    }
+    // Home: wind bed shared by day + night.
     this.sceneNodes.push(...this.noiseBed(0.09, 900, 300, { rate: 0.12, depth: 500, target: "lp" }));
     if (key === "day") {
       this.sceneNodes.push(...this.drone(52, 0.1, "sine"));
-      this.every(14000, 26000, () => { // distant metal creak
-        this.tone({ f0: 300 + Math.random() * 200, f1: 260, dur: 1.2, peak: 0.05, type: "sawtooth", lp: 1400, wet: true });
-      });
-      this.every(20000, 40000, () => { // a lone crow
-        for (let i = 0; i < 2; i++) this.tone({ f0: 900, f1: 700, dur: 0.14, peak: 0.05, type: "sawtooth", lp: 2600, wet: true, delay: i * 0.2 });
-      });
+      this.every(14000, 26000, () => this.tone({ f0: 300 + Math.random() * 200, f1: 260, dur: 1.2, peak: 0.05, type: "sawtooth", lp: 1400, wet: true }));
+      this.every(20000, 40000, () => { for (let i = 0; i < 2; i++) this.tone({ f0: 900, f1: 700, dur: 0.14, peak: 0.05, type: "sawtooth", lp: 2600, wet: true, delay: i * 0.2 }); });
     } else {
-      // Night: heavier drone, dissonant, distant groans + drips.
       this.sceneNodes.push(...this.drone(41, 0.26, "sawtooth"));
-      this.sceneNodes.push(...this.drone(43.5, 0.16, "sawtooth")); // beat against the 41 for unease
-      this.every(6000, 13000, () => { // distant infected groan
-        this.tone({ f0: 130 + Math.random() * 40, f1: 70, dur: 1.4, peak: 0.06, type: "sawtooth", lp: 800, wet: true });
-      });
-      this.every(3000, 8000, () => { // drip
-        this.tone({ f0: 1400 + Math.random() * 600, f1: 500, dur: 0.12, peak: 0.05, type: "sine", wet: true });
-      });
+      this.sceneNodes.push(...this.drone(43.5, 0.16, "sawtooth"));
+      this.every(6000, 13000, () => this.tone({ f0: 130 + Math.random() * 40, f1: 70, dur: 1.4, peak: 0.06, type: "sawtooth", lp: 800, wet: true }));
+      this.every(3000, 8000, () => this.tone({ f0: 1400 + Math.random() * 600, f1: 500, dur: 0.12, peak: 0.05, type: "sine", wet: true }));
     }
+  }
+
+  /** A driving battle motif while a boss hunts you: war-drum + tritone drone. */
+  setBossMusic(on: boolean): void {
+    if (on === this.bossOn) return;
+    if (on && (!this.unlocked || this.muted || !this.ctx)) return;
+    this.bossOn = on;
+    if (on) this.scheduleBossLoop();
+    else if (this.bossTimer) { clearTimeout(this.bossTimer); this.bossTimer = 0; }
+  }
+
+  private scheduleBossLoop(): void {
+    const mus = this.musBus;
+    if (!this.bossOn || !this.ctx || !mus) return;
+    try {
+      const BEAT = 0.5;
+      for (let i = 0; i < 8; i++) {
+        this.noise({ dur: 0.18, peak: i % 2 === 0 ? 0.26 : 0.14, lp: 480, delay: i * BEAT, bus: mus });
+        this.tone({ f0: 55, f1: 40, dur: 0.2, peak: 0.3, type: "sine", delay: i * BEAT, bus: mus });
+      }
+      this.tone({ f0: 49, dur: 8 * BEAT, peak: 0.18, type: "sawtooth", lp: 300, wet: true, bus: mus });
+      this.tone({ f0: 69.3, dur: 8 * BEAT, peak: 0.1, type: "sawtooth", lp: 320, wet: true, bus: mus }); // tritone
+    } catch { /* ignore */ }
+    this.bossTimer = window.setTimeout(() => this.scheduleBossLoop(), 8 * 0.5 * 1000 - 60);
   }
 }
 
