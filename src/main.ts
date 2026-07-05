@@ -41,6 +41,7 @@ const handlers: HudHandlers = {
   onBuild: (id) => gameHandlers?.onBuild(id),
   onEquip: (i) => gameHandlers?.onEquip(i),
   onUseSlot: (i) => gameHandlers?.onUseSlot(i),
+  onTravel: (id) => gameHandlers?.onTravel(id),
 };
 const hud = new Hud(hudRoot, content, handlers);
 const game = new Game(canvas, world, content, rng, input, hud, fx);

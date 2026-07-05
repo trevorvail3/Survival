@@ -20,12 +20,13 @@ import type {
   Player,
   Prop,
   StructureId,
+  Vec2,
   World,
 } from "./types.ts";
 import { WALKABLE } from "./types.ts";
-import { randInt } from "./rng.ts";
 import { findPath, pathToAdjacent } from "../client/pathfinding.ts";
-import { generateLayout } from "../content/map.ts";
+import { generateHome, generateRegion } from "../content/map.ts";
+import { regionById } from "../content/regions.ts";
 import { rollLoot } from "../content/loot.ts";
 import { settlementCapacity } from "../content/settlement.ts";
 
@@ -101,6 +102,7 @@ function blocked(world: World, x: number, y: number, r: number): boolean {
 }
 
 function inHome(world: World, x: number, y: number): boolean {
+  if (world.zoneId !== "home") return false;
   const h = world.home;
   return x >= h.x && x <= h.x + h.w && y >= h.y && y <= h.y + h.h;
 }
@@ -155,7 +157,7 @@ export function removeItem(player: Player, id: ItemId, qty: number): boolean {
 // ---------------------------------------------------------------------------
 
 export function createWorld(content: Content, rng: () => number): World {
-  const layout = generateLayout(rng);
+  const layout = generateHome(rng);
   const inv: (InvSlot | null)[] = new Array(INV_SIZE).fill(null);
   const player: Player = {
     pos: { x: layout.playerStart.x + 0.5, y: layout.playerStart.y + 0.5 },
@@ -188,27 +190,69 @@ export function createWorld(content: Content, rng: () => number): World {
     props: layout.props,
     settlement: { structures: { palisade: 1, forge: 0, workshop: 0, quarters: 1 }, population: 0 },
     home: layout.home,
+    zoneId: "home",
+    entry: { ...layout.playerStart },
+    homeCache: null,
     timeOfDay: 0.28,
     day: 1,
     clock: 0,
     nextId: 1,
     log: [],
   };
-
-  const walk = makeTileWalkable(world);
-  let placed = 0, guard = 0;
-  while (placed < 16 && guard++ < 600) {
-    const x = randInt(rng, 2, world.map.w - 3);
-    const y = randInt(rng, 2, world.map.h - 3);
-    if (!walk(x, y) || inHome(world, x, y)) continue;
-    const dx = x - player.pos.x, dy = y - player.pos.y;
-    if (dx * dx + dy * dy < 130) continue;
-    const r = rng();
-    const kind: EnemyKind = r < 0.62 ? "risen" : r < 0.85 ? "hound" : "wretch";
-    world.enemies.push(makeEnemy(world, content, kind, x + 0.5, y + 0.5));
-    placed++;
-  }
   return world;
+}
+
+/** Build the live Enemy list for a freshly-generated region. */
+function buildEnemies(world: World, content: Content, spawns: { kind: EnemyKind; x: number; y: number }[]): Enemy[] {
+  return spawns.map((s) => makeEnemy(world, content, s.kind, s.x + 0.5, s.y + 0.5));
+}
+
+/**
+ * Travel to another zone. The home settlement is cached so its layout + looted
+ * state persist; regions regenerate on each visit. Inventory, settlement and
+ * the clock all carry over — only the ground you stand on changes.
+ */
+export function travelTo(world: World, content: Content, rng: () => number, targetId: string, out: GameEvent[]): boolean {
+  if (targetId === world.zoneId) return false;
+  const p = world.player;
+
+  // Snapshot the home zone before leaving it.
+  if (world.zoneId === "home") {
+    world.homeCache = { map: world.map, props: world.props, enemies: world.enemies, ground: world.ground };
+  }
+
+  if (targetId === "home") {
+    const cache = world.homeCache;
+    if (cache) {
+      world.map = cache.map; world.props = cache.props; world.enemies = cache.enemies; world.ground = cache.ground;
+      world.entry = homeEntry(world);
+    } else {
+      const layout = generateHome(rng);
+      world.map = layout.map; world.props = layout.props; world.enemies = []; world.ground = [];
+      world.home = layout.home; world.entry = { ...layout.playerStart };
+    }
+    out.push({ t: "log", msg: "You return to your settlement." });
+  } else {
+    const def = regionById(targetId);
+    if (!def) return false;
+    const layout = generateRegion(rng, def);
+    world.map = layout.map; world.props = layout.props; world.ground = [];
+    world.enemies = buildEnemies(world, content, layout.enemySpawns ?? []);
+    world.entry = { ...layout.playerStart };
+    out.push({ t: "log", msg: `You set out for ${def.name}.` });
+  }
+
+  world.zoneId = targetId;
+  p.pos = { x: world.entry.x + 0.5, y: world.entry.y + 0.5 };
+  p.path = [];
+  p.order = { type: "none" };
+  return true;
+}
+
+/** The tile just inside the home gate — where you arrive when you return. */
+function homeEntry(world: World): Vec2 {
+  const h = world.home;
+  return { x: h.x + Math.floor(h.w / 2) + 2, y: h.y + h.h - 2 };
 }
 
 function makeEnemy(world: World, content: Content, kind: EnemyKind, x: number, y: number): Enemy {

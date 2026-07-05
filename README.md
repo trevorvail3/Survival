@@ -26,6 +26,16 @@ project.
   - **Forge** — smelt ore and smith swords, maces, mail and plate (tiered).
   - **Workshop** — craft spears, bows, waterskins and leathers.
   - **Quarters** — house the survivors you rescue.
+- **Set out on expeditions.** Your settlement is the hub. A **waystone** by the
+  gate opens *The Ways* — travel to distinct regions, each its own generated
+  zone with a bias of resources, its own dangers and survivors to find:
+  - **The Blighted Woods** (danger ◆) — timber & feverfew, risen and hounds.
+  - **The Ruined Abbey** (◆◆) — stone & stores, wretches, more survivors.
+  - **The Drowned Mire** (◆◆) — water & herbs, packs of hounds.
+  - **The Iron Barrows** (◆◆◆) — the richest ore, guarded by grave-knights.
+  Scavenge, then return by the region's waystone to bank it all at home. Regions
+  regenerate each visit; the settlement (and your pack) persist across travel.
+  The clock keeps ticking on the road — be home before the light fails.
 - **Gather & explore.** Fell trees for timber, break rock for stone and ore,
   pick feverfew, and loot chests, carts and the plague-dead out in the wilds.
 - **Recruit.** Free survivors trapped in ruined cottages; they join your
@@ -75,6 +85,6 @@ npm run build     # typecheck + production bundle into dist/
 
 ## Roadmap
 
-Next: **travel between distinct regions** from the settlement hub (each a
-generated zone with its own resources and survivors to find), deeper settler
-roles, and boss-tier revenants guarding the richest wilds.
+Next: deeper settler roles (assign the people you rescue to gather or defend),
+boss-tier grave-knights guarding the barrows, per-region gear/loot tables, and
+persistent region state (regions that stay cleared for a while after a raid).

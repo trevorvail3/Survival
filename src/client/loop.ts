@@ -19,6 +19,7 @@ import {
   restAtHearth,
   throwFirepot,
   tick,
+  travelTo,
   useSlot,
   type GameEvent,
 } from "../core/world.ts";
@@ -102,6 +103,7 @@ export class Game {
       if (pr && Math.hypot(pr.pos.x + 0.5 - p.pos.x, pr.pos.y + 0.5 - p.pos.y) < 1.8) {
         if (pr.kind === "hearth") { restAtHearth(world, this.events); this.dispatch(this.events, now); this.events.length = 0; this.hud.showBanner("Rest", "The hearth holds the dark back.", 1600); }
         else if (pr.kind === "townboard") this.hud.openSettlement();
+        else if (pr.kind === "waystone") this.hud.openTravel();
         else if (pr.kind === "forge" || pr.kind === "workbench") this.hud.openPack();
       }
       this.pendingStation = null;
@@ -191,7 +193,23 @@ export class Game {
       onBuild: (id: StructureId) => { const ev: GameEvent[] = []; if (build(this.world, this.content, id, ev)) this.dispatch(ev, performance.now()); },
       onEquip: (id: ItemId) => { const ev: GameEvent[] = []; useSlotById(this.world, this.content, id, ev); this.dispatch(ev, performance.now()); },
       onUseSlot: (i: number) => { const ev: GameEvent[] = []; useSlot(this.world, this.content, i, ev); this.dispatch(ev, performance.now()); },
+      onTravel: (regionId: string) => {
+        const ev: GameEvent[] = [];
+        if (travelTo(this.world, this.content, this.rng, regionId, ev)) {
+          this.hud.closeAll();
+          this.snapCamera();
+          const name = regionId === "home" ? "Your Settlement" : (this.content.regions.find((r) => r.id === regionId)?.name ?? "the wilds");
+          this.hud.showBanner(name, regionId === "home" ? "Home again." : "Watch the light.", 1800);
+          this.dispatch(ev, performance.now());
+        }
+      },
     };
+  }
+
+  private snapCamera(): void {
+    const p = this.world.player;
+    this.cam.x = p.pos.x * TILE - this.viewW / this.zoom / 2;
+    this.cam.y = p.pos.y * TILE - this.viewH / this.zoom / 2;
   }
 
   private dispatch(events: GameEvent[], now: number): void {

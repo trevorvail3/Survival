@@ -35,6 +35,7 @@ export const GLYPHS: Record<string, string> = {
   home: line(`<path d="M4 12 L12 5 L20 12 M6 11 V20 H18 V11 M10 20 V15 H14 V20"/>`),
   shield: line(`<path d="M12 3 L19 6 V12 Q19 18 12 21 Q5 18 5 12 V6 Z"/><path d="M12 8 V16"/>`),
   anvil: line(`<path d="M6 10 H20 Q18 14 13 14 H11 V18 H16 M11 18 H7 M9 10 V8 H14"/>`),
+  map: line(`<path d="M4 6 L9 4 L15 6 L20 4 V18 L15 20 L9 18 L4 20 Z M9 4 V18 M15 6 V20"/>`),
 };
 
 export function glyph(name: string): string {

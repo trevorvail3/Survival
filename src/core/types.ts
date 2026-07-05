@@ -179,6 +179,7 @@ export type PropKind =
   | "rock" // gather stone/iron (depletes + regrows)
   | "herbs" // gather herbs/food (depletes + regrows)
   | "survivor" // rescuable settlement member
+  | "waystone" // travel between the settlement and the regions
   | "gate"; // openable
 
 export interface Prop {
@@ -243,6 +244,32 @@ export interface Settlement {
 }
 
 // ---------------------------------------------------------------------------
+// Regions (discrete expeditions from the settlement hub)
+// ---------------------------------------------------------------------------
+
+export interface RegionDef {
+  id: string;
+  name: string;
+  blurb: string;
+  danger: number; // 1..3, shown as skulls
+  treeCount: number;
+  rockCount: number;
+  herbCount: number;
+  chests: number;
+  survivors: number;
+  enemyMix: EnemyKind[]; // repeat a kind to weight it
+  enemyCount: number;
+}
+
+/** A generated area's contents, cached so the home settlement persists. */
+export interface ZoneSnapshot {
+  map: GameMap;
+  props: Prop[];
+  enemies: Enemy[];
+  ground: GroundItem[];
+}
+
+// ---------------------------------------------------------------------------
 // The whole world
 // ---------------------------------------------------------------------------
 
@@ -253,8 +280,15 @@ export interface World {
   ground: GroundItem[];
   props: Prop[];
   settlement: Settlement;
-  /** Rect of the home settlement (safe zone); night spawns avoid it. */
+  /** Rect of the home settlement (safe zone); night spawns avoid it. Only
+   *  meaningful while `zoneId === "home"`. */
   home: { x: number; y: number; w: number; h: number };
+  /** The current area: "home" or a region id. */
+  zoneId: string;
+  /** Where the player spawns / stands after entering this zone (the waystone). */
+  entry: Vec2;
+  /** The home zone kept so its layout + looted state persist across trips. */
+  homeCache: ZoneSnapshot | null;
   timeOfDay: number;
   day: number;
   clock: number;
@@ -267,4 +301,5 @@ export interface Content {
   enemies: Record<EnemyKind, EnemyDef>;
   recipes: Recipe[];
   structures: Record<StructureId, StructureDef>;
+  regions: RegionDef[];
 }

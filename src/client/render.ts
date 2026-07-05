@@ -247,6 +247,21 @@ function drawProp(g: CanvasRenderingContext2D, pr: Prop, now: number): void {
         g.fillStyle = "#caa07a"; g.beginPath(); g.arc(cx, cy - TILE * 0.12, TILE * 0.13, 0, Math.PI * 2); g.fill();
       }
       break;
+    case "waystone": {
+      // A standing carved stone — the road out (and home).
+      g.fillStyle = "#5a5750";
+      g.beginPath();
+      g.moveTo(cx - TILE * 0.2, cy + TILE * 0.28);
+      g.lineTo(cx - TILE * 0.16, cy - TILE * 0.34);
+      g.lineTo(cx + TILE * 0.16, cy - TILE * 0.34);
+      g.lineTo(cx + TILE * 0.2, cy + TILE * 0.28);
+      g.closePath(); g.fill();
+      g.strokeStyle = "#2c2a26"; g.lineWidth = 2; g.stroke();
+      const gl = 0.5 + Math.sin(now / 260) * 0.3;
+      g.strokeStyle = `rgba(120,180,220,${gl})`; g.lineWidth = 2;
+      g.beginPath(); g.arc(cx, cy - TILE * 0.05, TILE * 0.1, 0, Math.PI * 2); g.moveTo(cx, cy - TILE * 0.18); g.lineTo(cx, cy + TILE * 0.1); g.stroke();
+      break;
+    }
     case "gate":
       break;
   }

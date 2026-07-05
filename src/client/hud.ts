@@ -20,6 +20,7 @@ export interface HudHandlers {
   onBuild: (id: StructureId) => void;
   onEquip: (itemId: ItemId) => void;
   onUseSlot: (slotIndex: number) => void;
+  onTravel: (regionId: string) => void;
 }
 
 export const HOTBAR: ItemId[] = ["poultice", "bread", "waterskin", "firebomb", "antidote"];
@@ -33,9 +34,10 @@ export class Hud {
   private logEl: HTMLElement;
   private pack: HTMLElement;
   private settle: HTMLElement;
+  private travel: HTMLElement;
   private banner: HTMLElement;
   private audioBtn: HTMLButtonElement;
-  private mode: "none" | "pack" | "settle" = "none";
+  private mode: "none" | "pack" | "settle" | "travel" = "none";
   private near: NearStations = { forge: false, workshop: false };
   private log: string[] = [];
 
@@ -47,6 +49,7 @@ export class Hud {
     this.hotbar = this.floating({ left: "50%", bottom: "12px", transform: "translateX(-50%)", display: "flex", gap: "6px" });
     this.pack = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(560px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none" });
     this.settle = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(520px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none" });
+    this.travel = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(520px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none" });
 
     this.banner = document.createElement("div");
     this.banner.className = "hud-banner";
@@ -83,10 +86,12 @@ export class Hud {
   private show(): void {
     this.pack.style.display = this.mode === "pack" ? "block" : "none";
     this.settle.style.display = this.mode === "settle" ? "block" : "none";
+    this.travel.style.display = this.mode === "travel" ? "block" : "none";
   }
   togglePack(): void { this.mode = this.mode === "pack" ? "none" : "pack"; this.show(); }
   openPack(): void { this.mode = "pack"; this.show(); }
   openSettlement(): void { this.mode = "settle"; this.show(); }
+  openTravel(): void { this.mode = "travel"; this.show(); }
   closeAll(): void { this.mode = "none"; this.show(); }
 
   showBanner(title: string, sub: string, hold = 2200): void {
@@ -125,7 +130,9 @@ export class Hud {
     const alive = world.enemies.filter((e) => e.state !== "dead").length;
     const phase = Math.floor(world.timeOfDay * 24);
     const cap = settlementCapacity(world.settlement.structures.quarters);
+    const zoneName = world.zoneId === "home" ? "Your Settlement" : (this.content.regions.find((r) => r.id === world.zoneId)?.name ?? "The Wilds");
     this.clock.innerHTML =
+      `<div style="font-family:'Cinzel',serif;font-size:11px;letter-spacing:.1em;color:var(--amber);text-align:right;margin-bottom:2px">${zoneName}</div>` +
       `<div class="hud-heading" style="justify-content:flex-end">Day ${world.day}</div>` +
       `<div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;font-size:13px">
         <span style="width:16px;height:16px;color:${night ? "#8fa6c0" : "#c8922e"};display:inline-block">${glyph(night ? "moon" : "sun")}</span>
@@ -150,6 +157,34 @@ export class Hud {
 
     if (this.mode === "pack") this.renderPack(world);
     else if (this.mode === "settle") this.renderSettlement(world);
+    else if (this.mode === "travel") this.renderTravel(world);
+  }
+
+  private renderTravel(world: World): void {
+    const atHome = world.zoneId === "home";
+    const skulls = (n: number) => `<span style="color:#8e2b23">${Array.from({ length: n }, () => "◆").join("")}</span>`;
+    const homeRow = `<div class="wrow">
+      <span style="width:20px;height:20px;color:var(--amber);display:inline-block">${glyph("home")}</span>
+      <div style="flex:1"><div style="color:var(--ink)">Your Settlement</div><div style="font-size:11px;color:var(--ink-dim)">Safe walls, hearth, forge and workshop.</div></div>
+      ${atHome ? `<span style="color:var(--amber);font-size:12px">HERE</span>` : `<button class="act" data-travel="home">Return</button>`}
+    </div>`;
+    const rows = this.content.regions.map((r) => {
+      const here = world.zoneId === r.id;
+      return `<div class="wrow">
+        <span style="width:20px;height:20px;color:var(--toxic);display:inline-block">${glyph("map")}</span>
+        <div style="flex:1"><div style="color:var(--ink)">${r.name} <span style="font-size:11px">${skulls(r.danger)}</span></div>
+        <div style="font-size:11px;color:var(--ink-dim)">${r.blurb}</div></div>
+        ${here ? `<span style="color:var(--amber);font-size:12px">HERE</span>` : `<button class="act" data-travel="${r.id}">Set Out</button>`}
+      </div>`;
+    }).join("");
+    this.travel.innerHTML =
+      `<style>.wrow{display:flex;align-items:center;gap:12px;padding:9px 4px;border-bottom:1px solid #1c1e20}</style>
+      <div class="hud-heading">The Ways ${atHome ? "" : "· abroad"}</div>
+      ${homeRow}${rows}
+      <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--ink-dim)">Time passes on the road. Return before the light fails. [Esc] close</div>`;
+    this.travel.querySelectorAll<HTMLElement>("button[data-travel]").forEach((el) => {
+      el.onclick = () => this.handlers.onTravel(el.dataset["travel"]!);
+    });
   }
 
   private renderPack(world: World): void {
