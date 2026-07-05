@@ -18,7 +18,7 @@ export type Sfx =
   | "drink" | "search" | "equip" | "click" | "hurt" | "death"
   | "nightfall" | "daybreak" | "lowhp";
 
-export type CreatureVoice = "risen" | "hound" | "wretch" | "revenant" | "graveking";
+export type CreatureVoice = "risen" | "hound" | "wretch" | "revenant" | "graveking" | "prior";
 export type SceneKey = "menu" | "day" | "night";
 
 const VOL_KEY = "ashfall-vol";
@@ -361,6 +361,11 @@ class AudioManager {
           if (kind === "aggro") { this.tone({ f0: 41, dur: 2.2, peak: 0.5, type: "sawtooth", lp: 300, wet: true }); this.tone({ f0: 61.74, dur: 2.2, peak: 0.34, type: "sawtooth", lp: 340, wet: true }); this.tone({ f0: 33, dur: 2.4, peak: 0.4, type: "sine", wet: true, delay: 0.05 }); }
           else if (kind === "attack") { this.noise({ dur: 0.3, peak: 0.6, lp: 900 }); this.tone({ f0: 70, f1: 30, dur: 0.5, peak: 0.5, type: "sawtooth", lp: 500, wet: true }); }
           else { this.tone({ f0: 48, f1: 18, dur: 3, peak: 0.5, type: "sawtooth", lp: 320, wet: true }); this.tone({ f0: 220, f1: 60, dur: 1.6, peak: 0.2, type: "triangle", wet: true, delay: 0.2 }); }
+          break;
+        case "prior": // the abbey boss — a dissonant plainchant wail
+          if (kind === "aggro") { this.note({ f: 146.83, dur: 2, peak: 0.34, type: "sawtooth", attack: 0.2, wet: true }); this.note({ f: 155.56, dur: 2, peak: 0.26, type: "sawtooth", attack: 0.25, wet: true }); this.tone({ f0: 73, dur: 2, peak: 0.3, type: "sine", wet: true }); }
+          else if (kind === "attack") { this.tone({ f0: 440, f1: 160, dur: 0.3, peak: 0.3, type: "sawtooth", lp: 2200, wet: true }); this.noise({ dur: 0.2, peak: 0.3, lp: 1400 }); }
+          else { this.note({ f: 196, dur: 2.4, peak: 0.3, type: "sawtooth", attack: 0.3, wet: true }); this.tone({ f0: 98, f1: 40, dur: 2.4, peak: 0.3, type: "sine", wet: true, delay: 0.1 }); }
           break;
       }
     } catch { /* ignore */ }

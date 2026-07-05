@@ -302,13 +302,18 @@ function drawEnemy(g: CanvasRenderingContext2D, e: Enemy, now: number): void {
     case "wretch": body = "#5a4a3a"; head = "#7a6a4a"; size = 0.46; break;
     case "revenant": body = "#4a4e54"; head = "#6a707a"; size = 0.44; break;
     case "graveking": body = "#33373e"; head = "#565d66"; size = 0.72; break;
+    case "prior": body = "#2c2a34"; head = "#c9c1b6"; size = 0.58; break;
     default: body = "#444"; head = "#666"; size = 0.32;
   }
   if (hurt) body = "#8e2b23";
 
-  // The boss drags a baleful red aura.
-  if (e.kind === "graveking") {
-    const aura = discSprite("kingaura", 64, [[0, "rgba(180,30,20,0.4)"], [1, "rgba(180,30,20,0)"]]);
+  // Bosses drag a baleful aura — red for the King, sickly green for the Prior.
+  if (e.boss) {
+    const key = e.kind === "prior" ? "prioraura" : "kingaura";
+    const stops: [number, string][] = e.kind === "prior"
+      ? [[0, "rgba(120,150,60,0.4)"], [1, "rgba(120,150,60,0)"]]
+      : [[0, "rgba(180,30,20,0.4)"], [1, "rgba(180,30,20,0)"]];
+    const aura = discSprite(key, 64, stops);
     const s = R(1.6);
     g.drawImage(aura, -s, -s, s * 2, s * 2);
   }
@@ -340,6 +345,16 @@ function drawEnemy(g: CanvasRenderingContext2D, e: Enemy, now: number): void {
     g.closePath(); g.fill();
     g.strokeStyle = "#b9c0c8"; g.lineWidth = R(0.08); g.lineCap = "round";
     g.beginPath(); g.moveTo(R(size * 0.85), R(0.2)); g.lineTo(R(size * 0.85), R(-1.0)); g.stroke();
+  }
+  if (e.kind === "prior") {
+    // A pointed cowl and a tall staff crowned with a sickly light.
+    g.fillStyle = "#1e1c26";
+    g.beginPath();
+    g.moveTo(0, R(-size * 1.35)); g.lineTo(R(-size * 0.5), R(-size * 0.55)); g.lineTo(R(size * 0.5), R(-size * 0.55)); g.closePath(); g.fill();
+    g.strokeStyle = "#5a4a2a"; g.lineWidth = R(0.06); g.lineCap = "round";
+    g.beginPath(); g.moveTo(R(size * 0.8), R(0.3)); g.lineTo(R(size * 0.8), R(-0.95)); g.stroke();
+    g.fillStyle = "rgba(150,190,80,0.9)";
+    g.beginPath(); g.arc(R(size * 0.8), R(-1.0), R(0.12), 0, Math.PI * 2); g.fill();
   }
   g.fillStyle = "rgba(190,210,120,0.85)";
   g.beginPath(); g.arc(R(-size * 0.2), R(-size * 0.75), R(0.04), 0, Math.PI * 2); g.arc(R(size * 0.2), R(-size * 0.75), R(0.04), 0, Math.PI * 2); g.fill();

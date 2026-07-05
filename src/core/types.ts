@@ -123,7 +123,7 @@ export interface Recipe {
 // Enemies — the risen dead and plague-beasts
 // ---------------------------------------------------------------------------
 
-export type EnemyKind = "risen" | "hound" | "wretch" | "revenant" | "graveking";
+export type EnemyKind = "risen" | "hound" | "wretch" | "revenant" | "graveking" | "prior";
 
 export interface EnemyDef {
   kind: EnemyKind;
@@ -266,6 +266,8 @@ export interface RegionDef {
   survivors: number;
   enemyMix: EnemyKind[]; // repeat a kind to weight it
   enemyCount: number;
+  /** A named boss that guards this region (once-per-run), if any. */
+  boss?: EnemyKind;
 }
 
 /** A generated area's contents, cached so the home settlement persists. */

@@ -411,13 +411,12 @@ function damageEnemy(world: World, content: Content, ctx: { rng: () => number },
   if (e.hp <= 0) {
     e.state = "dead";
     out.push({ t: "kill", kind: e.kind, x: e.pos.x, y: e.pos.y });
-    const table = e.kind === "graveking" ? "kill_graveking" : e.kind === "revenant" ? "kill_revenant" : "kill_common";
+    const table = e.boss ? `kill_${e.kind}` : e.kind === "revenant" ? "kill_revenant" : "kill_common";
     for (const d of rollLoot(ctx.rng, table)) spawnGround(world, d.id, d.qty, e.pos.x, e.pos.y);
     if (e.boss) {
       if (!world.bossesSlain.includes(e.kind)) world.bossesSlain.push(e.kind);
-      out.push({ t: "log", msg: "The Barrow King falls. His hoard is yours." });
+      out.push({ t: "log", msg: `${content.enemies[e.kind].name} falls. Its hoard is yours.` });
     }
-    void content;
   } else if (e.state === "idle" || e.state === "wander") {
     e.state = "hunt";
     out.push({ t: "aggro", kind: e.kind });

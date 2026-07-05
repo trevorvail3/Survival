@@ -25,6 +25,7 @@ export const REGIONS: RegionDef[] = [
     danger: 2,
     treeCount: 6, rockCount: 14, herbCount: 6, chests: 8, survivors: 2,
     enemyMix: ["risen", "wretch", "wretch"], enemyCount: 14,
+    boss: "prior",
   },
   {
     id: "mire",
@@ -41,6 +42,7 @@ export const REGIONS: RegionDef[] = [
     danger: 3,
     treeCount: 4, rockCount: 24, herbCount: 4, chests: 5, survivors: 1,
     enemyMix: ["wretch", "revenant", "risen"], enemyCount: 16,
+    boss: "graveking",
   },
 ];
 

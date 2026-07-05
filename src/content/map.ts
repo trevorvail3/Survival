@@ -202,10 +202,10 @@ export function generateRegion(rng: () => number, def: RegionDef): Layout {
     placed++;
   }
 
-  // A region boss: the Barrow King, deep in the barrows, away from the entrance.
-  // Grave/rubble tiles ARE walkable, so accept any standable ground; on the
-  // rare bad roll, scan outward from a known-open spot so he's never walled in.
-  if (def.id === "barrows") {
+  // A region's named boss, placed deep and away from the entrance. Grave/rubble
+  // tiles ARE walkable, so accept any standable ground; on a bad roll, scan
+  // outward from the cleared entry so the boss is never walled in.
+  if (def.boss) {
     const standable = (x: number, y: number): boolean => { const t = g.get(x, y); return t !== "water" && t !== "forest" && t !== "wall"; };
     let bx = ex, by = ey - 16, tries2 = 0;
     do { bx = randInt(rng, 6, g.w - 7); by = randInt(rng, 4, Math.floor(g.h / 2)); tries2++; } while (!standable(bx, by) && tries2 < 120);
@@ -216,7 +216,7 @@ export function generateRegion(rng: () => number, def: RegionDef): Layout {
         }
       }
     }
-    enemySpawns.push({ kind: "graveking", x: bx, y: by, boss: true });
+    enemySpawns.push({ kind: def.boss, x: bx, y: by, boss: true });
   }
 
   return { map: { w: g.w, h: g.h, tiles: g.tiles, indoor: g.indoor }, props, playerStart: entry, home: { x: -10, y: -10, w: 0, h: 0 }, enemySpawns };

@@ -105,6 +105,15 @@ export const LOOT: Record<string, LootEntry[]> = {
     { id: "plate", chance: 0.4, min: 1, max: 1 },
     { id: "poultice", chance: 1, min: 2, max: 4 },
   ],
+  // The Pale Prior — physic, mail, and a warbow from the abbey's armoury.
+  kill_prior: [
+    { id: "iron", chance: 1, min: 6, max: 12 },
+    { id: "mail", chance: 0.4, min: 1, max: 1 },
+    { id: "warbow", chance: 0.3, min: 1, max: 1 },
+    { id: "arrow", chance: 1, min: 8, max: 16 },
+    { id: "poultice", chance: 1, min: 2, max: 3 },
+    { id: "antidote", chance: 0.5, min: 1, max: 2 },
+  ],
 };
 
 export function rollLoot(rng: () => number, table: string): { id: ItemId; qty: number }[] {

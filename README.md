@@ -30,9 +30,12 @@ project.
   gate opens *The Ways* — travel to distinct regions, each its own generated
   zone with a bias of resources, its own dangers and survivors to find:
   - **The Blighted Woods** (danger ◆) — timber & feverfew, risen and hounds.
-  - **The Ruined Abbey** (◆◆) — stone & stores, wretches, more survivors.
+  - **The Ruined Abbey** (◆◆) — stone & stores, wretches, more survivors, and
+    **The Pale Prior** — a robed boss who drops mail and a warbow.
   - **The Drowned Mire** (◆◆) — water & herbs, packs of hounds.
-  - **The Iron Barrows** (◆◆◆) — the richest ore, guarded by grave-knights.
+  - **The Iron Barrows** (◆◆◆) — the richest ore, guarded by **The Barrow King**,
+    a crowned grave-knight who drops steel and plate.
+  Named bosses fall only once per run — their best-in-slot loot can't be farmed.
   Scavenge, then return by the region's waystone to bank it all at home. Regions
   regenerate each visit; the settlement (and your pack) persist across travel.
   The clock keeps ticking on the road — be home before the light fails.
@@ -47,6 +50,11 @@ project.
 **Controls:** click to move / fight / use · **1–5** use hotbar items (4 hurls a
 firepot at the cursor) · **Tab** pack & crafting · click the **town board** to
 build · **Esc** closes panels.
+
+Your run **autosaves** to the browser; close the tab and pick **Continue** to
+resume exactly where you left off — the zone you're in, your settlement, your
+pack and the bosses you've felled. Falling in battle ends the run and clears the
+save.
 
 ## What was lifted from `world`
 
@@ -85,6 +93,5 @@ npm run build     # typecheck + production bundle into dist/
 
 ## Roadmap
 
-Next: deeper settler roles (assign the people you rescue to gather or defend),
-boss-tier grave-knights guarding the barrows, per-region gear/loot tables, and
-persistent region state (regions that stay cleared for a while after a raid).
+Next: an audio/OST pass (per-region ambience themes, a boss battle motif), more
+settler depth (named survivors, morale), and a third boss for the Mire.

@@ -29,6 +29,7 @@ import { Fx } from "./fx.ts";
 import { Input } from "./input.ts";
 import { Hud, HOTBAR } from "./hud.ts";
 import { audio } from "./audio.ts";
+import { clearSave, saveGame } from "./save.ts";
 
 export class Game {
   private g: CanvasRenderingContext2D;
@@ -42,6 +43,7 @@ export class Game {
   private nextHeartbeat = 0;
   private events: GameEvent[] = [];
   private pendingStation: number | null = null;
+  private lastSave = 0;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -51,6 +53,7 @@ export class Game {
     private input: Input,
     private hud: Hud,
     private fx: Fx,
+    private seed: number,
   ) {
     this.g = canvas.getContext("2d")!;
     this.resize();
@@ -132,7 +135,13 @@ export class Game {
 
     this.hud.update(world, this.hoverPrompt(), { forge: this.near("forge"), workshop: this.near("workbench") });
     this.input.endFrame();
+
+    // Autosave the run every few seconds while alive.
+    if (p.alive && now - this.lastSave > 4000) { saveGame(world, this.seed); this.lastSave = now; }
   }
+
+  /** Persist now (e.g. on tab close), unless the run is already over. */
+  save(): void { if (this.world.player.alive) saveGame(this.world, this.seed); }
 
   private handleClick(sx: number, sy: number): void {
     const wpt = this.screenToWorld(sx, sy);
@@ -265,7 +274,7 @@ export class Game {
         case "equip": audio.play("equip"); break;
         case "dayBreak": audio.play("daybreak"); audio.setScene("day"); this.hud.showBanner(`Day ${e.day}`, "You saw the dawn.", 2200); break;
         case "nightFall": audio.play("nightfall"); audio.setScene("night"); this.hud.showBanner("Nightfall", "The dead walk. Hold your walls.", 2200); break;
-        case "death": audio.play("death"); audio.setScene("day"); this.hud.showDeath(this.world.day); break;
+        case "death": audio.play("death"); audio.setScene("day"); clearSave(); this.hud.showDeath(this.world.day); break;
         case "log": this.hud.pushLog(e.msg); break;
       }
     }

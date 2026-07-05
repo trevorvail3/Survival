@@ -16,4 +16,5 @@ export const ENEMIES: Record<EnemyKind, EnemyDef> = {
   wretch: { kind: "wretch", name: "Wretch", hp: 90, damage: 20, speed: 1.6, sense: 5, attackCd: 1100, reach: 1.1, armor: 2, bounty: 4 },
   revenant: { kind: "revenant", name: "Revenant Knight", hp: 220, damage: 34, speed: 1.5, sense: 8, attackCd: 1500, reach: 1.5, armor: 8, bounty: 12 },
   graveking: { kind: "graveking", name: "The Barrow King", hp: 640, damage: 52, speed: 1.5, sense: 11, attackCd: 1500, reach: 1.8, armor: 14, bounty: 60 },
+  prior: { kind: "prior", name: "The Pale Prior", hp: 360, damage: 30, speed: 2.0, sense: 11, attackCd: 1100, reach: 1.4, armor: 6, bounty: 40 },
 };
