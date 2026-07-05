@@ -1,19 +1,18 @@
 /**
  * src/core/types.ts
  * -----------------
- * The shared vocabulary of Ashfall. Only *shapes* live here — no logic, no DOM.
+ * The shared vocabulary of Ashfall — a medieval plague-horror survival game.
+ * Only *shapes* live here (no logic, no DOM).
  *
- * Design borrowed from the sibling `world` project: time and randomness are
- * never read from globals inside game logic. Anything that needs "now" or a
- * random roll receives a `Ctx`. That keeps the simulation deterministic and
- * testable, and leaves the door open to a shared-authority multiplayer core.
+ * Discipline borrowed from the sibling `world` project: time + randomness are
+ * injected via `Ctx`, never read from globals, so the simulation is
+ * deterministic and a shared-authority core stays possible. Movement is
+ * point-and-click (like `world`/OSRS): the player is given ORDERS and walks A*
+ * paths to carry them out.
  */
 
-/** Everything game logic needs from the outside: a clock and a dice bag. */
 export interface Ctx {
-  /** Monotonic time in ms (resets per reload). Drives cooldowns + animation. */
   now: number;
-  /** Random number in [0, 1). A seeded generator in play; Math.random at worst. */
   rng: () => number;
 }
 
@@ -23,45 +22,45 @@ export interface Vec2 {
 }
 
 // ---------------------------------------------------------------------------
-// World tiles
+// World tiles — a blighted medieval countryside
 // ---------------------------------------------------------------------------
 
-/**
- * The ground/structure a tile is. Walkability + look are derived from this.
- * A dead city block: cracked asphalt, dead grass poking through, rubble,
- * standing walls, doorways, and stagnant water you don't want to drink.
- */
 export type TileType =
-  | "asphalt"
-  | "concrete"
   | "grass"
+  | "path" // trodden dirt road
   | "dirt"
+  | "cobble" // village paving
+  | "stonefloor" // interiors / keep
+  | "field" // tilled farmland
+  | "wall" // stone/wood barrier (blocks)
+  | "gate" // passable opening
+  | "water" // river/moat (blocks)
+  | "forest" // dense bramble/trees (blocks)
   | "rubble"
-  | "wall"
-  | "door" // passable, but a wall visually until opened
-  | "water"
-  | "floor" // interior floorboards
-  | "blood"; // stained ground — cosmetic, walkable
+  | "grave"
+  | "blood";
 
 export const WALKABLE: Record<TileType, boolean> = {
-  asphalt: true,
-  concrete: true,
   grass: true,
+  path: true,
   dirt: true,
-  rubble: true,
+  cobble: true,
+  stonefloor: true,
+  field: true,
   wall: false,
-  door: true,
+  gate: true,
   water: false,
-  floor: true,
+  forest: false,
+  rubble: true,
+  grave: true,
   blood: true,
 };
 
 export interface GameMap {
   w: number;
   h: number;
-  /** Row-major tile grid, length w*h. */
   tiles: TileType[];
-  /** True where the tile is under a roof (interiors get lit differently). */
+  /** True where the tile is under a roof (interiors lit differently). */
   indoor: boolean[];
 }
 
@@ -71,46 +70,36 @@ export interface GameMap {
 
 export type ItemId = string;
 
-/** How an item can be used from the pack. */
-export type ItemUse = "heal" | "food" | "drink" | "throw" | "equip" | "light" | "none";
+export type ItemUse = "heal" | "food" | "drink" | "throw" | "equip" | "cure" | "none";
 
 export interface ItemDef {
   id: ItemId;
   name: string;
-  /** Icon silhouette key (see client/itemIcon.ts). */
-  shape: string;
-  /** Base material tint keyword, feeds the icon palette. */
-  material?: string;
-  stack: number; // max stack size
+  shape: string; // icon silhouette key (client/itemIcon.ts)
+  material?: string; // tint keyword for the icon palette
+  stack: number;
   use: ItemUse;
-  /** For weapons. */
   weapon?: WeaponDef;
-  /** heal/food/drink magnitudes. */
+  armor?: number; // damage soaked per hit when equipped as armour
+  slot?: "weapon" | "body"; // equip slot
   heal?: number;
   food?: number;
   drink?: number;
-  /** throwable damage + radius (molotov, brick). */
+  cure?: number; // infection removed
   throwDamage?: number;
   throwRadius?: number;
   fire?: boolean;
   desc: string;
 }
 
-export type WeaponKind = "fist" | "blade" | "blunt" | "cleaver" | "ranged" | "spear";
+export type WeaponKind = "fist" | "blade" | "blunt" | "axe" | "spear" | "bow";
 
 export interface WeaponDef {
   kind: WeaponKind;
   damage: number;
-  /** Melee reach in tiles / ranged max range. */
-  reach: number;
-  /** Stamina drained per swing. */
-  stamina: number;
-  /** ms between swings. */
-  cooldown: number;
-  /** Swing arc half-angle in radians (melee). */
-  arc?: number;
-  /** For ranged: ammo item + spread. */
-  ammo?: ItemId;
+  reach: number; // tiles; bows reach far
+  cooldown: number; // ms between blows (attack speed)
+  ammo?: ItemId; // bows consume arrows
 }
 
 export interface InvSlot {
@@ -123,31 +112,29 @@ export interface Recipe {
   out: ItemId;
   outQty: number;
   inputs: { id: ItemId; qty: number }[];
-  /** Requires being at a workbench (safehouse), or craftable anywhere. */
-  bench: boolean;
   name: string;
+  /** Minimum Forge level required (0 = craftable in the field). */
+  forge?: number;
+  /** Minimum Workshop level required. */
+  workshop?: number;
 }
 
 // ---------------------------------------------------------------------------
-// Enemies
+// Enemies — the risen dead and plague-beasts
 // ---------------------------------------------------------------------------
 
-export type EnemyKind = "shambler" | "runner" | "stalker" | "brute";
+export type EnemyKind = "risen" | "hound" | "wretch" | "revenant";
 
 export interface EnemyDef {
   kind: EnemyKind;
   name: string;
   hp: number;
   damage: number;
-  /** tiles/sec when hunting. */
-  speed: number;
-  /** aggro/sense radius in tiles. */
-  sense: number;
-  /** ms between attacks. */
-  attackCd: number;
-  /** melee reach in tiles. */
+  speed: number; // tiles/sec when hunting
+  sense: number; // aggro radius in tiles
+  attackCd: number; // ms between attacks
   reach: number;
-  /** xp/scrap value on kill (fed to loot). */
+  armor: number; // flat damage reduction
   bounty: number;
 }
 
@@ -159,15 +146,12 @@ export interface Enemy {
   pos: Vec2;
   hp: number;
   maxHp: number;
-  facing: number; // radians
+  facing: number;
   state: EnemyState;
-  /** current path (tiles) toward target, if hunting. */
   path: Vec2[];
-  /** ms timestamp when the enemy may next act (attack/repath). */
   nextAttack: number;
   nextThink: number;
   staggerUntil: number;
-  /** small per-enemy phase for idle bob animation. */
   seed: number;
 }
 
@@ -182,55 +166,80 @@ export interface GroundItem {
 }
 
 export type PropKind =
-  | "crate" // searchable, gives loot once
-  | "locker"
-  | "corpse" // searchable
-  | "car" // blocks + searchable
-  | "workbench"
-  | "campfire" // rest / save / cook
+  | "chest"
+  | "crate"
   | "barrel"
-  | "door"; // openable
+  | "remains" // searchable corpse
+  | "cart" // blocks + searchable
+  | "forge" // build/upgrade + weapon crafting
+  | "workbench" // workshop crafting
+  | "hearth" // rest / save / light
+  | "townboard" // open the settlement panel
+  | "tree" // gather wood (depletes + regrows)
+  | "rock" // gather stone/iron (depletes + regrows)
+  | "herbs" // gather herbs/food (depletes + regrows)
+  | "survivor" // rescuable settlement member
+  | "gate"; // openable
 
 export interface Prop {
   id: number;
   kind: PropKind;
   pos: Vec2;
-  /** searched/used already. */
   used: boolean;
-  /** loot table id for searchables. */
   loot?: string;
-  /** doors: open state. */
-  open?: boolean;
+  /** ms clock time a depleted resource node regrows. */
+  respawnAt?: number;
 }
 
 // ---------------------------------------------------------------------------
-// Player
+// Player + orders (point-and-click)
 // ---------------------------------------------------------------------------
+
+export type PlayerOrder =
+  | { type: "none" }
+  | { type: "move"; to: Vec2 }
+  | { type: "interact"; propId: number }
+  | { type: "attack"; enemyId: number };
 
 export interface Player {
   pos: Vec2;
-  facing: number; // radians, aim direction
+  facing: number;
   hp: number;
   maxHp: number;
-  stamina: number;
-  maxStamina: number;
-  /** 0..100, drops over time; 0 → HP bleeds. */
   hunger: number;
   thirst: number;
-  /** true while sprinting (drains stamina, moves faster). */
-  sprinting: boolean;
-  inv: (InvSlot | null)[]; // fixed-size grid
-  equipped: ItemId | null; // weapon in hand
-  /** ms timestamp the player may next swing / act. */
+  /** Tiles remaining to walk (drives movement + facing). */
+  path: Vec2[];
+  order: PlayerOrder;
+  inv: (InvSlot | null)[];
+  equipped: ItemId | null; // weapon
+  armor: ItemId | null; // body armour
   nextAttack: number;
-  /** ms until i-frames (dodge roll) end. */
-  invulnUntil: number;
-  /** ms until the current dodge-roll motion ends. */
-  rollUntil: number;
-  rollDir: Vec2;
-  /** infection 0..100 — creeps up when hit by infected, kills at 100. */
   infection: number;
   alive: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Settlement
+// ---------------------------------------------------------------------------
+
+export type StructureId = "palisade" | "forge" | "workshop" | "quarters";
+
+export interface StructureDef {
+  id: StructureId;
+  name: string;
+  maxLevel: number;
+  /** Cost per level (index 0 = build to level 1). */
+  costs: { id: ItemId; qty: number }[][];
+  blurb: string;
+  /** Short effect line per level, for the panel. */
+  effect: (level: number) => string;
+}
+
+export interface Settlement {
+  structures: Record<StructureId, number>; // current level, 0 = not built
+  population: number;
+  /** Members rescued but tribute not yet collected are tracked via population. */
 }
 
 // ---------------------------------------------------------------------------
@@ -243,21 +252,19 @@ export interface World {
   enemies: Enemy[];
   ground: GroundItem[];
   props: Prop[];
-  /** 0..1 through the current day; 0 = dawn, 0.5 = dusk, wraps. */
+  settlement: Settlement;
+  /** Rect of the home settlement (safe zone); night spawns avoid it. */
+  home: { x: number; y: number; w: number; h: number };
   timeOfDay: number;
-  /** integer day count; night survived → +1. */
   day: number;
-  /** ms of accumulated game time, for cooldown comparisons. */
   clock: number;
-  /** next entity id to hand out. */
   nextId: number;
-  /** floating combat/status text + particles live client-side; kept out of core. */
   log: string[];
 }
 
-/** All static content, resolved once at boot. */
 export interface Content {
   items: Record<ItemId, ItemDef>;
   enemies: Record<EnemyKind, EnemyDef>;
   recipes: Recipe[];
+  structures: Record<StructureId, StructureDef>;
 }

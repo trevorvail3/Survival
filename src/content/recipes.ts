@@ -1,22 +1,34 @@
 /**
  * src/content/recipes.ts
  * ----------------------
- * Crafting. Field recipes (bench:false) can be made anywhere from the pack;
- * bench recipes need the safehouse workbench. Scarcity is the whole game —
- * every bullet you press is powder you didn't keep for a molotov.
+ * Crafting. Field recipes need no station; others require a built Forge or
+ * Workshop at your settlement (and a minimum level). Upgrading those structures
+ * is how you unlock better arms and armour — the core progression loop.
  */
 
 import type { Recipe } from "../core/types.ts";
 
 export const RECIPES: Recipe[] = [
-  { id: "r_bandage", name: "Bandage", out: "bandage", outQty: 1, bench: false, inputs: [{ id: "cloth", qty: 2 }, { id: "alcohol", qty: 1 }] },
-  { id: "r_molotov", name: "Molotov", out: "molotov", outQty: 1, bench: false, inputs: [{ id: "alcohol", qty: 1 }, { id: "cloth", qty: 1 }] },
-  { id: "r_antibiotic", name: "Antibiotics", out: "antibiotic", outQty: 1, bench: false, inputs: [{ id: "herb", qty: 2 }, { id: "alcohol", qty: 1 }] },
-  { id: "r_spear", name: "Scrap Spear", out: "spear", outQty: 1, bench: false, inputs: [{ id: "wood", qty: 1 }, { id: "scrap", qty: 1 }, { id: "tape", qty: 1 }] },
+  // --- Field (anywhere) ---
+  { id: "r_poultice", name: "Poultice", out: "poultice", outQty: 1, inputs: [{ id: "herb", qty: 2 }, { id: "cloth", qty: 1 }] },
+  { id: "r_antidote", name: "Antidote", out: "antidote", outQty: 1, inputs: [{ id: "herb", qty: 3 }, { id: "oil", qty: 1 }] },
+  { id: "r_firebomb", name: "Firepot", out: "firebomb", outQty: 1, inputs: [{ id: "oil", qty: 1 }, { id: "cloth", qty: 1 }] },
+  { id: "r_club", name: "Wooden Club", out: "club", outQty: 1, inputs: [{ id: "wood", qty: 2 }] },
+  { id: "r_rope", name: "Rope", out: "rope", outQty: 1, inputs: [{ id: "cloth", qty: 3 }] },
 
-  { id: "r_ammo", name: "9mm Rounds x6", out: "ammo9mm", outQty: 6, bench: true, inputs: [{ id: "scrap", qty: 1 }, { id: "gunpowder", qty: 2 }] },
-  { id: "r_machete", name: "Machete", out: "machete", outQty: 1, bench: true, inputs: [{ id: "scrap", qty: 3 }, { id: "tape", qty: 1 }] },
-  { id: "r_pipe", name: "Steel Pipe", out: "pipe", outQty: 1, bench: true, inputs: [{ id: "scrap", qty: 2 }] },
-  { id: "r_fireaxe", name: "Fire Axe", out: "fireaxe", outQty: 1, bench: true, inputs: [{ id: "scrap", qty: 4 }, { id: "wood", qty: 2 }, { id: "tape", qty: 2 }] },
-  { id: "r_pistol", name: "9mm Pistol", out: "pistol", outQty: 1, bench: true, inputs: [{ id: "scrap", qty: 5 }, { id: "tape", qty: 2 }, { id: "gunpowder", qty: 1 }] },
+  // --- Workshop ---
+  { id: "r_arrows", name: "Arrows ×8", out: "arrow", outQty: 8, workshop: 1, inputs: [{ id: "wood", qty: 2 }, { id: "bone", qty: 1 }] },
+  { id: "r_waterskin", name: "Waterskin", out: "waterskin", outQty: 1, workshop: 1, inputs: [{ id: "leather", qty: 2 }] },
+  { id: "r_spear", name: "Boar Spear", out: "spear", outQty: 1, workshop: 1, inputs: [{ id: "wood", qty: 1 }, { id: "iron", qty: 1 }, { id: "rope", qty: 1 }] },
+  { id: "r_hatchet", name: "Hatchet", out: "hatchet", outQty: 1, workshop: 1, inputs: [{ id: "wood", qty: 1 }, { id: "iron", qty: 2 }] },
+  { id: "r_leather_armor", name: "Leather Jack", out: "leather_armor", outQty: 1, workshop: 1, inputs: [{ id: "leather", qty: 4 }, { id: "rope", qty: 1 }] },
+  { id: "r_warbow", name: "War Bow", out: "warbow", outQty: 1, workshop: 2, inputs: [{ id: "wood", qty: 3 }, { id: "rope", qty: 2 }] },
+
+  // --- Forge ---
+  { id: "r_smelt", name: "Smelt Iron", out: "iron", outQty: 1, forge: 1, inputs: [{ id: "iron_ore", qty: 2 }] },
+  { id: "r_iron_sword", name: "Iron Sword", out: "iron_sword", outQty: 1, forge: 1, inputs: [{ id: "iron", qty: 3 }, { id: "wood", qty: 1 }] },
+  { id: "r_mail", name: "Chain Mail", out: "mail", outQty: 1, forge: 2, inputs: [{ id: "iron", qty: 8 }] },
+  { id: "r_warmace", name: "War Mace", out: "warmace", outQty: 1, forge: 2, inputs: [{ id: "iron", qty: 5 }, { id: "wood", qty: 2 }] },
+  { id: "r_steel_sword", name: "Steel Longsword", out: "steel_sword", outQty: 1, forge: 3, inputs: [{ id: "iron", qty: 6 }, { id: "stone", qty: 2 }, { id: "wood", qty: 1 }] },
+  { id: "r_plate", name: "Plate Harness", out: "plate", outQty: 1, forge: 3, inputs: [{ id: "iron", qty: 14 }, { id: "leather", qty: 2 }] },
 ];

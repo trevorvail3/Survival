@@ -30,6 +30,11 @@ export const GLYPHS: Record<string, string> = {
   mute: line(`<path d="M4 9 H8 L13 5 V19 L8 15 H4 Z"/><path d="M17 9 L21 15 M21 9 L17 15"/>`),
   sound: line(`<path d="M4 9 H8 L13 5 V19 L8 15 H4 Z"/><path d="M16 8 Q19 12 16 16 M18.5 6 Q23 12 18.5 18"/>`),
   question: line(`<path d="M9 9 Q9 5 12 5 Q15 5 15 8 Q15 11 12 12 V14"/><circle cx="12" cy="18" r="0.6"/>`),
+  people: line(`<circle cx="8.5" cy="8" r="2.6"/><circle cx="15.5" cy="8" r="2.6"/><path d="M4 19 Q4 13 8.5 13 Q11 13 12 15 M12 15 Q13 13 15.5 13 Q20 13 20 19"/>`),
+  hammer: line(`<path d="M14 4 L20 10 M17 7 L9 15 L11 17 L19 9 M9 15 L5 19 A1.4 1.4 0 0 0 7 21 L11 17"/>`),
+  home: line(`<path d="M4 12 L12 5 L20 12 M6 11 V20 H18 V11 M10 20 V15 H14 V20"/>`),
+  shield: line(`<path d="M12 3 L19 6 V12 Q19 18 12 21 Q5 18 5 12 V6 Z"/><path d="M12 8 V16"/>`),
+  anvil: line(`<path d="M6 10 H20 Q18 14 13 14 H11 V18 H16 M11 18 H7 M9 10 V8 H14"/>`),
 };
 
 export function glyph(name: string): string {

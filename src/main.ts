@@ -38,6 +38,7 @@ const fx = new Fx();
 let gameHandlers: HudHandlers | null = null;
 const handlers: HudHandlers = {
   onCraft: (r) => gameHandlers?.onCraft(r),
+  onBuild: (id) => gameHandlers?.onBuild(id),
   onEquip: (i) => gameHandlers?.onEquip(i),
   onUseSlot: (i) => gameHandlers?.onUseSlot(i),
 };
@@ -50,18 +51,18 @@ const veil = document.createElement("div");
 veil.id = "veil";
 veil.innerHTML = `
   <div class="title">ASHFALL</div>
-  <div class="tagline">Survive the Grid</div>
+  <div class="tagline">A Plague of the Risen</div>
   <div class="lines" id="veilLines"></div>
-  <button class="start" id="startBtn">Enter the Dark</button>
-  <div style="font-size:12px;color:#5a5f5a;letter-spacing:.08em;max-width:560px;text-align:center;line-height:1.7">
-    WASD move · mouse aim · <b>click</b> attack · <b>Shift</b> sprint · <b>Space</b> dodge · <b>E</b> interact · <b>Q</b> switch weapon · <b>1–5</b> items · <b>Tab</b> pack &amp; craft
+  <button class="start" id="startBtn">Take Up the Blade</button>
+  <div style="font-size:12px;color:#5a5f5a;letter-spacing:.08em;max-width:600px;text-align:center;line-height:1.7">
+    <b>Click</b> to move · click a foe to fight · click to search &amp; gather · <b>1–5</b> use items · <b>Tab</b> pack &amp; craft · the <b>town board</b> builds your settlement
   </div>`;
 app.appendChild(veil);
 
 const LINES = [
-  "The cities went quiet a long winter ago. What walks them now was people, once.",
-  "You have a pipe, two bandages, and until nightfall. After that, the Grid belongs to the dead.",
-  "Scavenge. Craft. Do not be caught in the open when the light fails.",
+  "The plague took the living, and would not let them lie still. Now the dead walk the vale.",
+  "You hold one walled steading against the night. Rally survivors. Raise the forge. Arm your people.",
+  "Range out by day for timber, ore and herbs. Be behind your walls when the dark comes.",
 ];
 const linesEl = veil.querySelector<HTMLElement>("#veilLines")!;
 let li = 0;
@@ -91,4 +92,4 @@ startBtn.onclick = () => {
 };
 
 // Expose a little for debugging in the console.
-(window as unknown as Record<string, unknown>)["__ashfall"] = { world, content, audio };
+(window as unknown as Record<string, unknown>)["__ashfall"] = { world, content, audio, game, hud };

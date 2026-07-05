@@ -1,66 +1,67 @@
 # Ashfall
 
-A dark, top-down **survival-horror crafting game** — a cross of *Resident Evil*
-(dread, scarcity, the infected), *The Last of Us* (scavenge-and-craft, brutal
-melee, human-were-monsters) and *Elden Ring* (stamina, dodge-rolls, punishing
-enemies, checkpoints you earn). Mobile-friendly, single-player, and **built with
-no image or audio files** — every sprite, icon, sound and note is generated in
-code, exactly like the sibling [`world`](https://github.com/trevorvail3/world)
-project it borrows its engine techniques from.
+A **medieval plague-horror survival & settlement game**. The plague took the
+living and would not let them lie still; now the risen walk the vale. You hold
+one walled steading against the dark — **rescue survivors, raise your forge and
+walls, arm your people, and range out to gather what you need to endure**.
 
-> The cities went quiet a long winter ago. What walks them now was people, once.
+Point-and-click, mobile-friendly, single-player, and **built with no image or
+audio files**: every tile, icon, sound and note is generated in code, adapting
+engine techniques from the sibling [`world`](https://github.com/trevorvail3/world)
+project.
 
-## The first playable slice — *The Grid*
+> The plague took the living, and would not let them lie still.
 
-A procedurally-generated dead city district you must survive:
+## How it plays
 
-- **Move** with WASD, **aim** with the mouse, **click** to swing. Weapons have
-  weight: reach, stamina cost and swing speed all differ (pipe → machete →
-  fire axe → spear → scavenged pistol).
-- **Dodge-roll** (Space) with brief i-frames, **sprint** (Shift) at the cost of
-  stamina — and noise: sprinting near a **Stalker** brings the swarm.
-- **Four infected**, each a different threat: slow **Shamblers** in numbers, fast
-  fragile **Runners**, near-blind sound-hunting **Stalkers**, and the wall-of-hp
-  **Brute**. They hunt you with **A\*** pathfinding, flowing around walls and
-  through doorways.
-- **Survival meters** that bleed you out if ignored: Health, Stamina, Hunger,
-  Thirst, and **Infection** (creeps up when the infected land a hit; antibiotics
-  and bitterroot fight it back).
-- **Scavenge** crates, lockers, bodies, wrecks and barrels; **craft** bandages,
-  molotovs, ammo and better weapons — some anywhere, some only at the
-  **safehouse workbench**.
-- A **day/night cycle**. Night falls near-black, the streets fill, and your only
-  light is a small, failing pool. **Rest at the campfire** to reach dawn — if you
-  dare sleep with them out there.
+- **Point-and-click, like `world`/old-school RuneScape.** Click the ground to
+  walk there (A\* pathfinding), click a foe to close in and fight it on
+  weapon-speed ticks, click a chest / tree / ore / body to walk over and use it.
+- **Survive.** Health, Hunger, Thirst and **Infection** all bleed you out if
+  ignored; the risen raise your infection when they land a blow (antidotes and
+  feverfew fight it back).
+- **Build your settlement.** A walled home holds a Hearth, Forge, Workshop and a
+  Town Board. Spend gathered timber, stone and iron to **raise and upgrade**:
+  - **Palisade** — thins the numbers that breach the walls at night.
+  - **Forge** — smelt ore and smith swords, maces, mail and plate (tiered).
+  - **Workshop** — craft spears, bows, waterskins and leathers.
+  - **Quarters** — house the survivors you rescue.
+- **Gather & explore.** Fell trees for timber, break rock for stone and ore,
+  pick feverfew, and loot chests, carts and the plague-dead out in the wilds.
+- **Recruit.** Free survivors trapped in ruined cottages; they join your
+  settlement (up to your Quarters capacity) and **bring supplies each dawn**.
+- **Hold the night.** Nightfall drops the world near-black — your torch is a
+  small, failing pool of light — and fills the vale with the dead. Rest at the
+  hearth to reach dawn.
 
-Open the **pack** (Tab) to manage inventory and craft. Numbers **1–5** quick-use
-consumables (4 throws a molotov at your cursor). **Q** cycles weapons.
+**Controls:** click to move / fight / use · **1–5** use hotbar items (4 hurls a
+firepot at the cursor) · **Tab** pack & crafting · click the **town board** to
+build · **Esc** closes panels.
 
 ## What was lifted from `world`
 
-The `world` game generates everything in code; Ashfall adapts its engine layers
-to a survival-horror skin:
+Engine techniques from the sibling game, re-skinned for a medieval plague:
 
-| From `world` | Adapted here |
+| From `world` | Used here |
 | --- | --- |
-| `audio.ts` procedural WebAudio engine | `client/audio.ts` — the synth core (noise/reverb buffers, `tone`/`note`/`noise` voices, drones, autoplay-unlock, bus graph) lifted verbatim; the *vocabulary* rewritten for horror: low dissonant drones, wet impacts, gunfire, wind, and the wet-throat voices of the infected. |
-| `itemIcon.ts` + `glyph.ts` icon generators | `client/itemIcon.ts` + `client/glyph.ts` — the color toolkit, `Pal`/`shadeFrom` shading and the `draw(shape, pal, id)` silhouette switch, redrawn for the salvage roster; monochrome `currentColor` glyphs for the HUD. |
-| `avatar.ts` + `gearLook.ts` | `client/avatar.ts` — the layered-parts composition, arm-swing animation and `drawTool`-in-hand technique, reworked into a top-down, mouse-aimed survivor. |
-| `render.ts` canvas drawing | `client/render.ts` — hash-noise terrain tinting, the cached radial-gradient `discSprite`, and the day/night veil with punched-out warm light pools — pushed toward black, with the veil composed on its own layer so light reveals the world. |
-| `pathfinding.ts` A\* | `client/pathfinding.ts` — lifted almost verbatim; here it drives the infected hunting you. |
+| `pathfinding.ts` (A\*) | `client/pathfinding.ts` — click-to-walk, walk-to-adjacent for interaction, and the risen hunting you. Lifted almost verbatim. |
+| `audio.ts` WebAudio engine | `client/audio.ts` — synth core (noise/reverb buffers, `tone`/`note`/`noise` voices, drones, bus graph, autoplay-unlock) kept; vocabulary rewritten for horror: drones, wet blows, bowfire, the wet-throat voices of the risen. |
+| `itemIcon.ts` + `glyph.ts` | `client/itemIcon.ts` + `client/glyph.ts` — the colour toolkit, `Pal`/`shadeFrom` shading and `draw(shape,pal,id)` switch, redrawn for arms, armour, materials and consumables; `currentColor` HUD glyphs. |
+| `avatar.ts` + `gearLook.ts` | `client/avatar.ts` — layered-parts + swing + `drawTool` technique as a top-down survivor, with a worn-armour overlay. |
+| `render.ts` | `client/render.ts` — hash-noise terrain tinting, cached `discSprite` glows, and the day/night veil with light pools punched into their own layer (so light reveals the world). Cranked toward black. |
 
 ## Architecture
 
-Same discipline as `world`: a **pure core** and a **client** that only reads it.
+A **pure core** the client only reads from (the `world` discipline):
 
-- `src/core` — types, a seeded RNG, and the simulation (`world.ts`: survival,
-  combat, enemy AI, crafting, day/night). Randomness and time are injected via a
-  `Ctx`, so a `?seed=` reproduces a run exactly. The core emits `GameEvent`s as
-  data; it never touches the DOM or audio.
-- `src/content` — pure data: items, recipes, enemies, loot tables, and the
-  procedural map generator.
-- `src/client` — audio, icons, avatar, renderer, pathfinding, input, HUD, and the
-  game loop that turns core events into sound and particles.
+- `src/core` — types, seeded RNG, and the simulation (`world.ts`): movement
+  orders, tick-based combat, survival, the risen's AI, day/night, night raids,
+  crafting, and the settlement (building, upgrades, rescued-member tribute).
+  Time + randomness arrive via `Ctx`; effects are emitted as `GameEvent` data.
+- `src/content` — data only: items, enemies, recipes, structures, loot tables,
+  and the procedural region generator.
+- `src/client` — audio, icons, avatar, renderer, pathfinding, input, HUD, and
+  the loop that turns clicks into orders and core events into sound + FX.
 
 ## Run it
 
@@ -70,4 +71,10 @@ npm run dev       # http://localhost:5173
 npm run build     # typecheck + production bundle into dist/
 ```
 
-`?seed=42` in the URL locks the district layout for repeatable runs.
+`?seed=7` locks the region layout for repeatable runs.
+
+## Roadmap
+
+Next: **travel between distinct regions** from the settlement hub (each a
+generated zone with its own resources and survivors to find), deeper settler
+roles, and boss-tier revenants guarding the richest wilds.

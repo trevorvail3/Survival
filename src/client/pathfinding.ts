@@ -115,3 +115,38 @@ function reconstruct(node: Node): Vec2[] {
   path.reverse();
   return path;
 }
+
+const ADJ: Vec2[] = [
+  { x: 1, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 1 }, { x: 0, y: -1 },
+  { x: 1, y: 1 }, { x: 1, y: -1 }, { x: -1, y: 1 }, { x: -1, y: -1 },
+];
+
+/**
+ * Route to the walkable tile beside `target` cheapest to reach — how you walk
+ * UP to a chest or a foe before acting on it. `alreadyAdjacent` lets the caller
+ * act at once without walking. Lifted from the sibling `world` project.
+ */
+export function pathToAdjacent(
+  walkable: Walkable,
+  from: Vec2,
+  target: Vec2,
+): { path: Vec2[]; reachable: boolean; alreadyAdjacent: boolean } {
+  const fx = Math.round(from.x);
+  const fy = Math.round(from.y);
+  const tx = Math.round(target.x);
+  const ty = Math.round(target.y);
+  if (Math.abs(fx - tx) <= 1 && Math.abs(fy - ty) <= 1) {
+    return { path: [], reachable: true, alreadyAdjacent: true };
+  }
+  let best: Vec2[] | null = null;
+  for (const n of ADJ) {
+    const ax = tx + n.x;
+    const ay = ty + n.y;
+    if (!walkable(ax, ay)) continue;
+    const path = findPath(walkable, from, { x: ax, y: ay });
+    if (path.length === 0) continue;
+    if (best === null || path.length < best.length) best = path;
+  }
+  if (best === null) return { path: [], reachable: false, alreadyAdjacent: false };
+  return { path: best, reachable: true, alreadyAdjacent: false };
+}

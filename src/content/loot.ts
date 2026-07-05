@@ -1,9 +1,8 @@
 /**
  * src/content/loot.ts
  * -------------------
- * Loot tables for searchable props and infected kills. A table is a weighted
- * list of drops; each entry has a chance and a quantity range. Rolled with the
- * injected rng so a seed reproduces a run.
+ * Weighted loot tables for searchables, gathered resource nodes, and the drops
+ * of the risen. Rolled with the injected rng so a seed reproduces a run.
  */
 
 import type { ItemId } from "../core/types.ts";
@@ -11,62 +10,68 @@ import { randInt } from "../core/rng.ts";
 
 export interface LootEntry {
   id: ItemId;
-  chance: number; // 0..1
+  chance: number;
   min: number;
   max: number;
 }
 
 export const LOOT: Record<string, LootEntry[]> = {
-  crate: [
-    { id: "scrap", chance: 0.7, min: 1, max: 3 },
-    { id: "wood", chance: 0.5, min: 1, max: 2 },
+  chest: [
+    { id: "iron", chance: 0.4, min: 1, max: 3 },
     { id: "cloth", chance: 0.5, min: 1, max: 3 },
-    { id: "tape", chance: 0.25, min: 1, max: 1 },
-    { id: "cannedfood", chance: 0.3, min: 1, max: 2 },
+    { id: "poultice", chance: 0.35, min: 1, max: 2 },
+    { id: "leather", chance: 0.4, min: 1, max: 2 },
+    { id: "arrow", chance: 0.3, min: 3, max: 10 },
+    { id: "oil", chance: 0.25, min: 1, max: 2 },
   ],
-  locker: [
-    { id: "cloth", chance: 0.6, min: 1, max: 2 },
-    { id: "bandage", chance: 0.3, min: 1, max: 1 },
-    { id: "antibiotic", chance: 0.15, min: 1, max: 1 },
-    { id: "alcohol", chance: 0.35, min: 1, max: 1 },
-    { id: "ammo9mm", chance: 0.2, min: 2, max: 6 },
-  ],
-  corpse: [
-    { id: "ammo9mm", chance: 0.4, min: 1, max: 5 },
-    { id: "scrap", chance: 0.4, min: 1, max: 2 },
-    { id: "bandage", chance: 0.25, min: 1, max: 1 },
-    { id: "cannedfood", chance: 0.2, min: 1, max: 1 },
-    { id: "herb", chance: 0.25, min: 1, max: 2 },
-  ],
-  car: [
-    { id: "scrap", chance: 0.8, min: 2, max: 4 },
-    { id: "gunpowder", chance: 0.3, min: 1, max: 2 },
-    { id: "tape", chance: 0.3, min: 1, max: 1 },
+  crate: [
+    { id: "wood", chance: 0.7, min: 1, max: 3 },
+    { id: "cloth", chance: 0.5, min: 1, max: 2 },
+    { id: "rope", chance: 0.3, min: 1, max: 1 },
+    { id: "bread", chance: 0.35, min: 1, max: 2 },
   ],
   barrel: [
-    { id: "alcohol", chance: 0.5, min: 1, max: 2 },
-    { id: "gunpowder", chance: 0.3, min: 1, max: 1 },
-    { id: "water", chance: 0.4, min: 1, max: 2 },
+    { id: "oil", chance: 0.5, min: 1, max: 2 },
+    { id: "waterskin", chance: 0.3, min: 1, max: 1 },
+    { id: "bread", chance: 0.3, min: 1, max: 2 },
   ],
-  // Dropped by the infected on death.
+  remains: [
+    { id: "bone", chance: 0.6, min: 1, max: 2 },
+    { id: "cloth", chance: 0.4, min: 1, max: 2 },
+    { id: "iron", chance: 0.25, min: 1, max: 1 },
+    { id: "herb", chance: 0.2, min: 1, max: 2 },
+  ],
+  cart: [
+    { id: "wood", chance: 0.8, min: 2, max: 4 },
+    { id: "iron_ore", chance: 0.4, min: 1, max: 2 },
+    { id: "leather", chance: 0.3, min: 1, max: 2 },
+  ],
+  // Resource nodes.
+  tree: [{ id: "wood", chance: 1, min: 2, max: 4 }],
+  rock: [
+    { id: "stone", chance: 1, min: 2, max: 3 },
+    { id: "iron_ore", chance: 0.5, min: 1, max: 2 },
+  ],
+  herbs: [
+    { id: "herb", chance: 1, min: 1, max: 3 },
+    { id: "bread", chance: 0.2, min: 1, max: 1 },
+  ],
+  // Kill drops.
   kill_common: [
-    { id: "scrap", chance: 0.25, min: 1, max: 1 },
+    { id: "bone", chance: 0.3, min: 1, max: 1 },
     { id: "cloth", chance: 0.25, min: 1, max: 1 },
     { id: "herb", chance: 0.12, min: 1, max: 1 },
   ],
-  kill_brute: [
-    { id: "ammo9mm", chance: 0.8, min: 3, max: 8 },
-    { id: "scrap", chance: 1, min: 2, max: 4 },
-    { id: "gunpowder", chance: 0.6, min: 1, max: 3 },
+  kill_revenant: [
+    { id: "iron", chance: 1, min: 2, max: 5 },
+    { id: "leather", chance: 0.6, min: 1, max: 2 },
+    { id: "poultice", chance: 0.5, min: 1, max: 2 },
   ],
 };
 
-/** Roll a loot table into a flat list of {id, qty}. */
 export function rollLoot(rng: () => number, table: string): { id: ItemId; qty: number }[] {
   const entries = LOOT[table] ?? [];
   const out: { id: ItemId; qty: number }[] = [];
-  for (const e of entries) {
-    if (rng() < e.chance) out.push({ id: e.id, qty: randInt(rng, e.min, e.max) });
-  }
+  for (const e of entries) if (rng() < e.chance) out.push({ id: e.id, qty: randInt(rng, e.min, e.max) });
   return out;
 }

@@ -13,11 +13,12 @@
  */
 
 export type Sfx =
-  | "melee" | "hit" | "crit" | "gunshot" | "dryfire" | "throw" | "explode"
-  | "dodge" | "pickup" | "craft" | "heal" | "eat" | "drink" | "search"
-  | "equip" | "click" | "hurt" | "death" | "nightfall" | "daybreak" | "lowhp";
+  | "melee" | "hit" | "crit" | "bowshot" | "dryfire" | "throw" | "explode"
+  | "pickup" | "craft" | "build" | "recruit" | "gather" | "heal" | "eat"
+  | "drink" | "search" | "equip" | "click" | "hurt" | "death"
+  | "nightfall" | "daybreak" | "lowhp";
 
-export type CreatureVoice = "shambler" | "runner" | "stalker" | "brute";
+export type CreatureVoice = "risen" | "hound" | "wretch" | "revenant";
 export type SceneKey = "menu" | "day" | "night";
 
 const VOL_KEY = "ashfall-vol";
@@ -244,14 +245,26 @@ class AudioManager {
           this.tone({ f0: 160, f1: 40, dur: 0.22, peak: 0.4, type: "square", lp: 700 });
           this.tone({ f0: 900, f1: 300, dur: 0.1, peak: 0.18, type: "triangle", delay: 0.01 });
           break;
-        case "gunshot":
-          this.noise({ dur: 0.06, peak: 0.9, hp: 300, lp: 9000 });
-          this.tone({ f0: 320, f1: 60, dur: 0.12, peak: 0.5, type: "square", lp: 1400 });
-          this.noise({ dur: 0.5, peak: 0.22, lp: 2000, wet: true, delay: 0.03 }); // report tail
+        case "bowshot":
+          this.tone({ f0: 240, f1: 120, dur: 0.06, peak: 0.2, type: "triangle" }); // string release
+          this.noise({ dur: 0.22, peak: 0.16, hp: 900, lp: 5000 }); // arrow whoosh
           break;
         case "dryfire":
-          this.tone({ f0: 1800, f1: 1400, dur: 0.03, peak: 0.14, type: "square" });
-          this.noise({ dur: 0.03, peak: 0.1, hp: 4000 });
+          this.tone({ f0: 1200, f1: 900, dur: 0.04, peak: 0.12, type: "square" });
+          this.noise({ dur: 0.04, peak: 0.08, hp: 3000 });
+          break;
+        case "build":
+          this.noise({ dur: 0.1, peak: 0.24, hp: 1200, lp: 6000 });
+          this.tone({ f0: 240, f1: 200, dur: 0.16, peak: 0.2, type: "triangle", delay: 0.02, wet: true });
+          this.tone({ f0: 200, f1: 170, dur: 0.2, peak: 0.18, type: "triangle", delay: 0.16, wet: true });
+          break;
+        case "recruit":
+          this.note({ f: 262, dur: 0.5, peak: 0.14, type: "triangle", attack: 0.02, wet: true });
+          this.note({ f: 392, dur: 0.6, peak: 0.13, type: "triangle", attack: 0.03, wet: true, delay: 0.12 });
+          break;
+        case "gather":
+          this.noise({ dur: 0.18, peak: 0.2, hp: 300, lp: 2400 });
+          this.tone({ f0: 180, f1: 120, dur: 0.14, peak: 0.14, type: "sine" });
           break;
         case "throw":
           this.noise({ dur: 0.22, peak: 0.14, hp: 700, lp: 3000 });
@@ -260,10 +273,6 @@ class AudioManager {
           this.noise({ dur: 0.7, peak: 0.8, lp: 1600, wet: true });
           this.tone({ f0: 160, f1: 30, dur: 0.6, peak: 0.5, type: "sawtooth", lp: 500 });
           this.noise({ dur: 0.9, peak: 0.3, hp: 1200, lp: 6000, delay: 0.02 });
-          break;
-        case "dodge":
-          this.noise({ dur: 0.24, peak: 0.16, hp: 900, lp: 4000 });
-          this.tone({ f0: 380, f1: 160, dur: 0.2, peak: 0.08, type: "sine" });
           break;
         case "pickup":
           this.tone({ f0: 520, f1: 640, dur: 0.08, peak: 0.14, type: "triangle" });
@@ -328,27 +337,25 @@ class AudioManager {
         this.noise({ dur: dur * 0.8, peak: peak * 0.5, lp: 1400, hp: 200 });
       };
       switch (v) {
-        case "shambler":
-          if (kind === "aggro") growl(150, 90, 0.7, 0.22);
-          else if (kind === "attack") growl(180, 70, 0.3, 0.24);
-          else growl(120, 30, 1.0, 0.26);
+        case "risen": // a wet, dragging moan
+          if (kind === "aggro") growl(140, 85, 0.8, 0.22);
+          else if (kind === "attack") growl(170, 65, 0.3, 0.24);
+          else growl(110, 28, 1.1, 0.26);
           break;
-        case "runner":
-          if (kind === "aggro") { this.tone({ f0: 600, f1: 900, dur: 0.4, peak: 0.24, type: "sawtooth", lp: 2400, wet: true }); this.noise({ dur: 0.4, peak: 0.2, hp: 600, lp: 3000 }); }
-          else if (kind === "attack") this.tone({ f0: 800, f1: 400, dur: 0.2, peak: 0.24, type: "square", lp: 2000 });
-          else this.tone({ f0: 700, f1: 120, dur: 0.6, peak: 0.24, type: "sawtooth", lp: 1800, wet: true });
+        case "hound": // a rabid snarl / bark
+          if (kind === "aggro") { this.tone({ f0: 520, f1: 820, dur: 0.35, peak: 0.24, type: "sawtooth", lp: 2200, wet: true }); this.noise({ dur: 0.35, peak: 0.2, hp: 600, lp: 3000 }); }
+          else if (kind === "attack") this.tone({ f0: 700, f1: 360, dur: 0.18, peak: 0.24, type: "square", lp: 1900 });
+          else this.tone({ f0: 620, f1: 110, dur: 0.55, peak: 0.24, type: "sawtooth", lp: 1700, wet: true });
           break;
-        case "stalker": // dry clicking (echolocation)
-          if (kind === "die") this.tone({ f0: 500, f1: 80, dur: 0.7, peak: 0.24, type: "sawtooth", lp: 1600, wet: true });
-          else {
-            const n = kind === "aggro" ? 6 : 3;
-            for (let i = 0; i < n; i++) this.tone({ f0: 2200 + i * 60, dur: 0.02, peak: 0.2, type: "square", delay: i * 0.06 });
-          }
+        case "wretch": // bloated, phlegmy
+          if (kind === "aggro") { growl(90, 60, 1.0, 0.3); this.noise({ dur: 0.5, peak: 0.16, lp: 900 }); }
+          else if (kind === "attack") { this.noise({ dur: 0.3, peak: 0.4, lp: 800 }); growl(110, 50, 0.4, 0.3); }
+          else growl(80, 24, 1.4, 0.32);
           break;
-        case "brute":
-          if (kind === "aggro") { growl(70, 50, 1.4, 0.4); this.tone({ f0: 44, dur: 1.4, peak: 0.3, type: "sine", wet: true }); }
-          else if (kind === "attack") { this.noise({ dur: 0.4, peak: 0.5, lp: 700 }); growl(90, 40, 0.5, 0.4); }
-          else { this.tone({ f0: 60, f1: 24, dur: 2.2, peak: 0.4, type: "sawtooth", lp: 380, wet: true }); }
+        case "revenant": // armoured knight — low dread + steel
+          if (kind === "aggro") { growl(64, 46, 1.4, 0.4); this.tone({ f0: 44, dur: 1.4, peak: 0.3, type: "sine", wet: true }); }
+          else if (kind === "attack") { this.noise({ dur: 0.14, peak: 0.4, hp: 2000, lp: 8000 }); growl(90, 40, 0.5, 0.36); }
+          else { this.tone({ f0: 58, f1: 22, dur: 2.2, peak: 0.4, type: "sawtooth", lp: 360, wet: true }); this.tone({ f0: 620, f1: 200, dur: 0.5, peak: 0.14, type: "triangle", wet: true, delay: 0.1 }); }
           break;
       }
     } catch { /* ignore */ }

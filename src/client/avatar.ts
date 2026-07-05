@@ -19,9 +19,9 @@ export interface AvatarLook {
 
 export const DEFAULT_LOOK: AvatarLook = {
   skin: "#c99873",
-  jacket: "#59614f",
-  hood: "#3a3f30",
-  pack: "#6a4c30",
+  jacket: "#6b5236", // brown wool tunic
+  hood: "#4a3b26", // travel hood
+  pack: "#5a4028", // leather satchel
 };
 
 export interface AvatarAnim {
@@ -57,6 +57,7 @@ export function drawSurvivor(
   look: AvatarLook,
   anim: AvatarAnim,
   weapon: WeaponKind,
+  armorTone?: string | null,
 ): void {
   const t = anim.now;
   // Walk bob: a subtle scale pulse so movement reads even top-down.
@@ -105,12 +106,25 @@ export function drawSurvivor(
   g.fill();
   g.stroke();
 
+  // Worn armour: a plate/mail cuirass over the tunic.
+  if (armorTone) {
+    g.fillStyle = armorTone;
+    g.strokeStyle = shade(armorTone, -0.4);
+    g.lineWidth = R(0.03);
+    rr(g, R(-0.2), R(-0.18), R(0.4), R(0.38), R(0.1));
+    g.fill();
+    g.stroke();
+    g.strokeStyle = shade(armorTone, 0.4);
+    g.lineWidth = R(0.02);
+    g.beginPath(); g.moveTo(0, R(-0.16)); g.lineTo(0, R(0.18)); g.stroke();
+  }
+
   // Arms + weapon. The weapon-side arm sweeps through the swing.
   const swingAmt = anim.swing != null ? (1 - anim.swing) : 0;
   // Arm rest angle points forward (up in local space).
   const armReach = R(0.34);
   // Melee: sweep from one side to the other across the swing.
-  const sweep = weapon === "ranged" ? 0 : (swingAmt - 0.5) * 1.9;
+  const sweep = weapon === "bow" ? 0 : (swingAmt - 0.5) * 1.9;
 
   // Far arm (holds steady / supports).
   drawArm(g, R(0.18), R(-0.12), R(0.16) + sweep * R(0.05), armReach * 0.7, look, R);
@@ -123,7 +137,7 @@ export function drawSurvivor(
   g.save();
   g.translate(handX, handY);
   g.rotate(sweep * 0.9);
-  drawWeapon(g, R, weapon, anim);
+  drawWeapon(g, R, weapon);
   g.restore();
 
   // Head / hood on top (front).
@@ -166,7 +180,7 @@ function drawArm(
   g.fill();
 }
 
-function drawWeapon(g: CanvasRenderingContext2D, R: (u: number) => number, kind: WeaponKind, anim: AvatarAnim): void {
+function drawWeapon(g: CanvasRenderingContext2D, R: (u: number) => number, kind: WeaponKind): void {
   g.lineCap = "round";
   switch (kind) {
     case "blade":
@@ -176,17 +190,20 @@ function drawWeapon(g: CanvasRenderingContext2D, R: (u: number) => number, kind:
       g.strokeStyle = "#2a2c2e"; g.lineWidth = R(0.06);
       g.beginPath(); g.moveTo(0, R(0.02)); g.lineTo(0, R(0.12)); g.stroke();
       break;
-    case "cleaver":
-      g.fillStyle = "#8e2b23";
+    case "axe":
+      g.strokeStyle = "#5a4028"; g.lineWidth = R(0.06);
+      g.beginPath(); g.moveTo(0, R(0.1)); g.lineTo(0, R(-0.42)); g.stroke();
+      g.fillStyle = "#9096a0";
       g.beginPath();
-      g.moveTo(R(-0.03), 0); g.lineTo(R(-0.16), R(-0.4)); g.lineTo(R(0.14), R(-0.42)); g.lineTo(R(0.05), 0); g.closePath();
+      g.moveTo(0, R(-0.42)); g.lineTo(R(0.2), R(-0.36)); g.lineTo(R(0.12), R(-0.2)); g.lineTo(0, R(-0.26)); g.closePath();
       g.fill();
-      g.strokeStyle = "#1c1c1e"; g.lineWidth = R(0.04); g.stroke();
+      g.strokeStyle = "#2a2c2e"; g.lineWidth = R(0.02); g.stroke();
       break;
     case "blunt":
-      g.strokeStyle = "#7d858c";
-      g.lineWidth = R(0.09);
-      g.beginPath(); g.moveTo(0, R(0.1)); g.lineTo(0, R(-0.44)); g.stroke();
+      g.strokeStyle = "#5a4028"; g.lineWidth = R(0.07);
+      g.beginPath(); g.moveTo(0, R(0.1)); g.lineTo(0, R(-0.4)); g.stroke();
+      g.fillStyle = "#7d858c";
+      g.beginPath(); g.arc(0, R(-0.44), R(0.1), 0, Math.PI * 2); g.fill();
       break;
     case "spear":
       g.strokeStyle = "#5a4028"; g.lineWidth = R(0.05);
@@ -194,15 +211,11 @@ function drawWeapon(g: CanvasRenderingContext2D, R: (u: number) => number, kind:
       g.fillStyle = "#9096a0";
       g.beginPath(); g.moveTo(0, R(-0.66)); g.lineTo(R(0.07), R(-0.5)); g.lineTo(R(-0.07), R(-0.5)); g.closePath(); g.fill();
       break;
-    case "ranged": {
-      g.fillStyle = "#3a3e44";
-      rr(g, R(-0.06), R(-0.28), R(0.12), R(0.34), R(0.03)); g.fill();
-      g.strokeStyle = "#1c1c1e"; g.lineWidth = R(0.02); g.stroke();
-      if (anim.swing != null && anim.swing > 0.7) {
-        // muzzle flash on the freshest part of the "swing" (trigger pull).
-        g.fillStyle = "#ffd27a";
-        g.beginPath(); g.arc(0, R(-0.34), R(0.09), 0, Math.PI * 2); g.fill();
-      }
+    case "bow": {
+      g.strokeStyle = "#6b4a2a"; g.lineWidth = R(0.045);
+      g.beginPath(); g.arc(R(0.12), R(-0.16), R(0.34), Math.PI * 0.62, Math.PI * 1.38); g.stroke();
+      g.strokeStyle = "#cabf9a"; g.lineWidth = R(0.015);
+      g.beginPath(); g.moveTo(R(-0.06), R(-0.44)); g.lineTo(R(-0.06), R(0.12)); g.stroke();
       break;
     }
     case "fist":

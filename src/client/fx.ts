@@ -21,7 +21,13 @@ export class Fx {
   private floaters: Floater[] = [];
   /** Short-lived light sources (muzzle/explosion) for the lighting pass. */
   lights: { x: number; y: number; r: number; color: string; born: number; dur: number }[] = [];
+  private rings: { x: number; y: number; life: number; color: string }[] = [];
   private now = 0;
+
+  /** A click-destination ring (walk here / act on this). */
+  ping(x: number, y: number, color: string): void {
+    this.rings.push({ x, y, life: 1, color });
+  }
 
   blood(x: number, y: number, n = 10): void {
     for (let i = 0; i < n; i++) {
@@ -77,10 +83,23 @@ export class Fx {
     }
     this.floaters = this.floaters.filter((f) => f.life > 0);
     this.lights = this.lights.filter((l) => now - l.born < l.dur);
+    for (const r of this.rings) r.life -= dt * 1.6;
+    this.rings = this.rings.filter((r) => r.life > 0);
   }
 
   /** Draw world-space particles/floaters. Call with the zoom transform active. */
   draw(g: CanvasRenderingContext2D): void {
+    // Click rings, drawn under everything else.
+    for (const r of this.rings) {
+      const t = 1 - r.life;
+      g.globalAlpha = r.life * 0.8;
+      g.strokeStyle = r.color;
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(r.x * TILE, r.y * TILE, (2 + t * 12), 0, Math.PI * 2);
+      g.stroke();
+    }
+    g.globalAlpha = 1;
     for (const p of this.parts) {
       g.globalAlpha = Math.max(0, p.life / p.maxLife);
       g.fillStyle = p.color;

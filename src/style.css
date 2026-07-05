@@ -2,7 +2,7 @@
  * src/style.css
  * -------------
  * The look of Ashfall: cold ash, dried blood, sodium-lamp sickly amber.
- * Headings use "Oswald" (condensed, harsh); body uses "Inter".
+ * Headings use "Cinzel" (medieval display); body uses "EB Garamond".
  * Everything is deliberately desaturated and dim — this is a dead world.
  */
 
@@ -33,7 +33,7 @@ body {
   overflow: hidden;
   background: var(--bg);
   color: var(--ink);
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: "EB Garamond", Georgia, serif;
   /* Stop mobile browsers hijacking taps with zoom/scroll gestures. */
   touch-action: none;
   -webkit-user-select: none;
@@ -52,7 +52,7 @@ body {
   width: 100%;
   height: 100%;
   display: block;
-  cursor: crosshair;
+  cursor: pointer;
   image-rendering: pixelated;
 }
 
@@ -77,7 +77,7 @@ body {
 }
 
 .hud-heading {
-  font-family: "Oswald", sans-serif;
+  font-family: "Cinzel", serif;
   font-weight: 600;
   font-size: 12px;
   letter-spacing: 0.14em;
@@ -99,7 +99,7 @@ body {
   text-align: center;
 }
 .hud-banner h1 {
-  font-family: "Oswald", sans-serif;
+  font-family: "Cinzel", serif;
   font-weight: 600;
   font-size: clamp(28px, 8vw, 64px);
   letter-spacing: 0.2em;
@@ -115,14 +115,14 @@ body {
 
 /* Prompt bubble ("[E] Pry open") near an interactable. */
 .prompt {
-  font-family: "Oswald", sans-serif;
+  font-family: "Cinzel", serif;
   letter-spacing: 0.06em;
   font-size: 13px;
 }
 
 button.act {
   pointer-events: auto;
-  font-family: "Oswald", sans-serif;
+  font-family: "Cinzel", serif;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-size: 12px;
@@ -155,7 +155,7 @@ button.act:active {
   transition: opacity 1.2s ease;
 }
 #veil .title {
-  font-family: "Oswald", sans-serif;
+  font-family: "Cinzel", serif;
   font-weight: 600;
   font-size: clamp(44px, 14vw, 120px);
   letter-spacing: 0.32em;
@@ -180,7 +180,7 @@ button.act:active {
 }
 #veil .start {
   margin-top: 8px;
-  font-family: "Oswald", sans-serif;
+  font-family: "Cinzel", serif;
   letter-spacing: 0.2em;
   text-transform: uppercase;
   font-size: 15px;
