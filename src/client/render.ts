@@ -247,6 +247,19 @@ function drawProp(g: CanvasRenderingContext2D, pr: Prop, now: number): void {
         g.fillStyle = "#caa07a"; g.beginPath(); g.arc(cx, cy - TILE * 0.12, TILE * 0.13, 0, Math.PI * 2); g.fill();
       }
       break;
+    case "maptable": {
+      // A cartographer's table: legs, a parchment map, and a few markers.
+      g.fillStyle = "#4a3826";
+      g.fillRect(cx - TILE * 0.5, cy - TILE * 0.32, TILE, TILE * 0.64);
+      g.strokeStyle = "#241a10"; g.lineWidth = 2; g.strokeRect(cx - TILE * 0.5, cy - TILE * 0.32, TILE, TILE * 0.64);
+      g.fillStyle = "#c9b98a"; // parchment
+      g.fillRect(cx - TILE * 0.4, cy - TILE * 0.24, TILE * 0.8, TILE * 0.48);
+      g.strokeStyle = "rgba(90,60,30,0.5)"; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(cx - TILE * 0.28, cy - TILE * 0.1); g.lineTo(cx + TILE * 0.2, cy + TILE * 0.06); g.stroke();
+      g.fillStyle = "#8e2b23";
+      g.beginPath(); g.arc(cx - TILE * 0.18, cy - TILE * 0.08, 2, 0, Math.PI * 2); g.arc(cx + TILE * 0.16, cy + TILE * 0.08, 2, 0, Math.PI * 2); g.fill();
+      break;
+    }
     case "waystone": {
       // A standing carved stone — the road out (and home).
       g.fillStyle = "#5a5750";

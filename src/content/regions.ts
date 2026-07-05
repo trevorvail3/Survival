@@ -16,7 +16,7 @@ export const REGIONS: RegionDef[] = [
     blurb: "Close timber and feverfew. The risen shamble between the trees.",
     danger: 1,
     treeCount: 22, rockCount: 6, herbCount: 16, chests: 3, survivors: 1,
-    enemyMix: ["risen", "risen", "hound"], enemyCount: 12,
+    enemyMix: ["risen", "risen", "hound"], enemyCount: 12, mx: 0.22, my: 0.30,
   },
   {
     id: "abbey",
@@ -25,7 +25,7 @@ export const REGIONS: RegionDef[] = [
     danger: 2,
     treeCount: 6, rockCount: 14, herbCount: 6, chests: 8, survivors: 2,
     enemyMix: ["risen", "wretch", "wretch"], enemyCount: 14,
-    boss: "prior",
+    boss: "prior", mx: 0.76, my: 0.26,
   },
   {
     id: "mire",
@@ -33,7 +33,7 @@ export const REGIONS: RegionDef[] = [
     blurb: "Black water and rot. Hounds hunt the reed-banks.",
     danger: 2,
     treeCount: 10, rockCount: 6, herbCount: 22, chests: 4, survivors: 1,
-    enemyMix: ["hound", "hound", "wretch"], enemyCount: 15,
+    enemyMix: ["hound", "hound", "wretch"], enemyCount: 15, mx: 0.24, my: 0.76,
   },
   {
     id: "barrows",
@@ -42,7 +42,7 @@ export const REGIONS: RegionDef[] = [
     danger: 3,
     treeCount: 4, rockCount: 24, herbCount: 4, chests: 5, survivors: 1,
     enemyMix: ["wretch", "revenant", "risen"], enemyCount: 16,
-    boss: "graveking",
+    boss: "graveking", mx: 0.80, my: 0.72,
   },
 ];
 

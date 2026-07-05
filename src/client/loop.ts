@@ -113,7 +113,7 @@ export class Game {
       if (pr && Math.hypot(pr.pos.x + 0.5 - p.pos.x, pr.pos.y + 0.5 - p.pos.y) < 1.8) {
         if (pr.kind === "hearth") { restAtHearth(world, this.content, this.rng, this.events); this.dispatch(this.events, now); this.events.length = 0; }
         else if (pr.kind === "townboard") { this.hud.openSettlement(); this.tut("board"); }
-        else if (pr.kind === "waystone") this.hud.openTravel();
+        else if (pr.kind === "waystone" || pr.kind === "maptable") this.hud.openTravel();
         else if (pr.kind === "forge" || pr.kind === "workbench") { this.hud.openPack(); this.tut("pack"); }
       }
       this.pendingStation = null;
@@ -216,7 +216,7 @@ export class Game {
     const LABELS: Partial<Record<string, string>> = {
       chest: "Search chest", crate: "Search crate", barrel: "Search barrel", remains: "Search remains", cart: "Search wreck",
       tree: "Fell timber", rock: "Mine stone", herbs: "Gather herbs", survivor: "Rescue survivor",
-      forge: "Work the forge", workbench: "Use the workshop", hearth: "Rest until dawn", townboard: "Muster the settlement", waystone: "Travel the ways",
+      forge: "Work the forge", workbench: "Use the workshop", hearth: "Rest until dawn", townboard: "Muster the settlement", waystone: "Read the waystone", maptable: "Study the war map",
     };
     const CONSUMED = new Set(["chest", "crate", "barrel", "remains", "cart", "survivor", "tree", "rock", "herbs"]);
     let pd = 0.8; let label: string | null = null;

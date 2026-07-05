@@ -1,0 +1,5 @@
+# Deploy Ashfall to Netlify: connect this repo in the Netlify UI and it builds
+# the static Vite bundle. No server needed — it's a pure client-side game.
+[build]
+  command = "npm run build"
+  publish = "dist"

@@ -423,7 +423,7 @@ function advancePlayer(world: World, content: Content, ctx: { rng: () => number 
     if (dist <= wep.reach + PLAYER_RADIUS) {
       p.path = []; // in reach — plant and fight
       if (world.clock >= p.nextAttack) {
-        p.nextAttack = world.clock + wep.cooldown;
+        p.nextAttack = world.clock + wep.cooldown * playerMods(p).cooldownMult; // Alacrity
         attackTarget(world, content, ctx, e, out);
       }
     } else {
@@ -470,7 +470,8 @@ function attackTarget(world: World, content: Content, ctx: { rng: () => number }
   const eDef = content.enemies[e.kind];
   const m = playerMods(p);
   const crit = ctx.rng() < m.critChance;
-  let dmg = Math.round(wep.damage * m.meleeMult * (0.85 + ctx.rng() * 0.3) * (crit ? 1.8 : 1));
+  const berserk = p.hp / p.maxHp < 0.4 ? 1 + m.lowHpDmg : 1; // Berserker
+  let dmg = Math.round(wep.damage * m.meleeMult * berserk * (0.85 + ctx.rng() * 0.3) * (crit ? 1.8 : 1));
   dmg = Math.max(1, dmg - Math.max(0, eDef.armor - m.armorPen));
   damageEnemy(world, content, ctx, e, dmg, crit, out);
   // Knockback + brief stagger on solid hits.
@@ -543,7 +544,7 @@ export function nearestProp(world: World, maxDist: number): Prop | null {
 
 /** Non-searchable stations open UI instead of giving loot. */
 export function isStation(kind: Prop["kind"]): boolean {
-  return kind === "forge" || kind === "workbench" || kind === "hearth" || kind === "townboard" || kind === "gate";
+  return kind === "forge" || kind === "workbench" || kind === "hearth" || kind === "townboard" || kind === "maptable" || kind === "gate";
 }
 
 function resolveInteract(world: World, content: Content, ctx: { rng: () => number }, pr: Prop, out: GameEvent[]): void {
@@ -570,7 +571,8 @@ function resolveInteract(world: World, content: Content, ctx: { rng: () => numbe
   else out.push({ t: "search" });
   const drops = rollLoot(ctx.rng, pr.loot ?? pr.kind);
   if (drops.length === 0) { out.push({ t: "log", msg: "Empty." }); return; }
-  const bonus = isNode ? playerMods(world.player).gatherBonus : 0; // Forager
+  const pm = playerMods(world.player);
+  const bonus = isNode ? pm.gatherBonus : pm.lootLuck; // Forager / Scavenger
   for (const d of drops) {
     const qty = d.qty + bonus;
     const left = addItem(world.player, content, d.id, qty);
@@ -734,6 +736,11 @@ export function tick(world: World, content: Content, ctx: { now: number; rng: ()
   if (p.infection >= 100) bleed += 4;
   else if (p.infection > 0) p.infection = Math.max(0, p.infection - 0.12 * dt);
   if (bleed > 0) p.hp -= bleed * dt;
+  // Regeneration: Second Wind everywhere, Rally within your own walls.
+  const pm = playerMods(p);
+  let regen = pm.regen;
+  if (world.zoneId === "home") regen += pm.rallyRegen;
+  if (regen > 0 && p.hp > 0) p.hp = Math.min(p.maxHp, p.hp + regen * dt);
   if (p.hp <= 0 && p.alive) { p.hp = 0; p.alive = false; out.push({ t: "death" }); return; }
 
   // Night raids — at home, thinned by the Palisade + Guards and kept outside the
@@ -746,7 +753,7 @@ export function tick(world: World, content: Content, ctx: { now: number; rng: ()
     if (atHome) {
       const palisadeMult = Math.max(0, 1 - world.settlement.structures.palisade * 0.25);
       const guardMult = Math.max(0.25, 1 - world.settlement.roles.guard * 0.12);
-      mult = palisadeMult * guardMult;
+      mult = palisadeMult * guardMult * playerMods(p).raidMult; // Fortify
     }
     if (alive < cap && ctx.rng() < 0.85 * dt * (1 + world.day * 0.12) * mult) spawnNearPlayer(world, content, ctx);
     // The watch looses arrows: guards cull attackers near home.
@@ -755,13 +762,15 @@ export function tick(world: World, content: Content, ctx: { now: number; rng: ()
 
   // Enemy AI.
   const walk = makeTileWalkable(world);
+  const senseMult = pm.senseMult;
   for (const e of world.enemies) {
     if (e.state === "dead") continue;
     const def = content.enemies[e.kind];
     const dx = p.pos.x - e.pos.x, dy = p.pos.y - e.pos.y;
     const dist = Math.hypot(dx, dy);
     if (world.clock < e.staggerUntil) { e.state = "stagger"; continue; }
-    if (dist <= def.sense && (e.state === "idle" || e.state === "wander")) { e.state = "hunt"; out.push({ t: "aggro", kind: e.kind }); }
+    const sense = def.sense * senseMult; // Prowl makes you harder to notice
+    if (dist <= sense && (e.state === "idle" || e.state === "wander")) { e.state = "hunt"; out.push({ t: "aggro", kind: e.kind }); }
 
     if (e.state === "hunt" || e.state === "attack" || e.state === "stagger") {
       e.facing = Math.atan2(dy, dx);
@@ -774,7 +783,7 @@ export function tick(world: World, content: Content, ctx: { now: number; rng: ()
         }
         moveEnemyAlong(world, e, def.speed, dt, dx, dy);
       }
-      if (dist > def.sense * 2.6 && e.kind !== "risen") { e.state = "wander"; e.path = []; }
+      if (dist > sense * 2.6 && e.kind !== "risen") { e.state = "wander"; e.path = []; }
     } else if (e.state === "idle") {
       if (ctx.rng() < 0.4 * dt) e.state = "wander";
     } else if (e.state === "wander") {

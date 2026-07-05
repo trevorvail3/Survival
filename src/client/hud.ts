@@ -68,7 +68,7 @@ export class Hud {
     this.pack = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(560px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none" });
     this.settle = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(520px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none" });
     this.travel = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(520px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none" });
-    this.skillsP = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(680px,94vw)", maxHeight: "88vh", overflow: "auto", display: "none" });
+    this.skillsP = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(780px,96vw)", maxHeight: "90vh", overflow: "auto", display: "none" });
 
     this.bossBar = this.floating({ left: "50%", top: "64px", transform: "translateX(-50%)", width: "min(440px,72vw)", display: "none", textAlign: "center" });
     this.tracker = this.panel({ left: "12px", top: "172px", maxWidth: "230px", display: "none" });
@@ -230,7 +230,7 @@ export class Hud {
 
   private renderSkills(world: World): void {
     const p = world.player;
-    const COLX = [42, 110, 178], ROWY = [50, 150, 250], R = 22;
+    const COLX = [42, 110, 178], ROWY = [46, 118, 190, 262], R = 21;
 
     const treeSvg = (tree: SkillTree): string => {
       const nodes = SKILLS.filter((n) => n.tree === tree);
@@ -262,8 +262,8 @@ export class Hud {
           `<text x="${cx(n)}" y="${cy(n) + R + 13}" text-anchor="middle" font-size="10" fill="#c3c6c4">${n.name}</text></g>`;
       }).join("");
 
-      return `<div style="flex:1;min-width:220px"><div class="hud-heading" style="color:var(--amber);text-align:center">${TREE_NAMES[tree]} · ${pointsInTree(p.skills, tree)} pt</div>` +
-        `<svg viewBox="0 0 220 300" width="100%" style="max-width:240px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">${edges}${circles}</svg></div>`;
+      return `<div style="flex:1;min-width:200px"><div class="hud-heading" style="color:var(--amber);text-align:center">${TREE_NAMES[tree]} · ${pointsInTree(p.skills, tree)} pt</div>` +
+        `<svg viewBox="0 0 220 300" width="100%" style="max-width:230px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">${edges}${circles}</svg></div>`;
     };
 
     this.skillsP.innerHTML =
@@ -277,28 +277,44 @@ export class Hud {
   }
 
   private renderTravel(world: World): void {
-    const atHome = world.zoneId === "home";
-    const skulls = (n: number) => `<span style="color:#8e2b23">${Array.from({ length: n }, () => "◆").join("")}</span>`;
-    const homeRow = `<div class="wrow">
-      <span style="width:20px;height:20px;color:var(--amber);display:inline-block">${glyph("home")}</span>
-      <div style="flex:1"><div style="color:var(--ink)">Your Settlement</div><div style="font-size:11px;color:var(--ink-dim)">Safe walls, hearth, forge and workshop.</div></div>
-      ${atHome ? `<span style="color:var(--amber);font-size:12px">HERE</span>` : `<button class="act" data-travel="home">Return</button>`}
-    </div>`;
-    const rows = this.content.regions.map((r) => {
-      const here = world.zoneId === r.id;
-      return `<div class="wrow">
-        <span style="width:20px;height:20px;color:var(--toxic);display:inline-block">${glyph("map")}</span>
-        <div style="flex:1"><div style="color:var(--ink)">${r.name} <span style="font-size:11px">${skulls(r.danger)}</span></div>
-        <div style="font-size:11px;color:var(--ink-dim)">${r.blurb}</div></div>
-        ${here ? `<span style="color:var(--amber);font-size:12px">HERE</span>` : `<button class="act" data-travel="${r.id}">Set Out</button>`}
-      </div>`;
+    const W = 460, H = 340; // parchment map
+    const hx = W / 2, hy = H / 2;
+    const skulls = (n: number) => Array.from({ length: n }, () => "◆").join("");
+
+    // Roads from the settlement out to each region.
+    const roads = this.content.regions.map((r) => {
+      const active = world.zoneId === r.id;
+      return `<line x1="${hx}" y1="${hy}" x2="${r.mx * W}" y2="${r.my * H}" stroke="${active ? "#c8922e" : "#7a5a36"}" stroke-width="2.5" stroke-dasharray="4 5" opacity="0.7"/>`;
     }).join("");
+
+    // Region pins.
+    const pins = this.content.regions.map((r) => {
+      const px = r.mx * W, py = r.my * H;
+      const here = world.zoneId === r.id;
+      const dcol = r.danger >= 3 ? "#c23b2c" : r.danger === 2 ? "#c8922e" : "#7f9a3c";
+      const labelLeft = r.mx < 0.5;
+      return `<g data-travel="${r.id}" style="cursor:pointer">
+        <title>${r.name} — ${r.blurb}${r.boss ? " · a boss guards it" : ""}</title>
+        <circle cx="${px}" cy="${py}" r="${here ? 11 : 9}" fill="${here ? "#c8922e" : "#2a2620"}" stroke="${here ? "#fff2cf" : dcol}" stroke-width="2.5"/>
+        <text x="${labelLeft ? px + 15 : px - 15}" y="${py - 2}" text-anchor="${labelLeft ? "start" : "end"}" font-size="13" font-family="Cinzel, serif" fill="#e6dcc4">${r.name}</text>
+        <text x="${labelLeft ? px + 15 : px - 15}" y="${py + 13}" text-anchor="${labelLeft ? "start" : "end"}" font-size="11" fill="${dcol}">${skulls(r.danger)}${here ? "  · here" : ""}</text>
+      </g>`;
+    }).join("");
+
+    const atHome = world.zoneId === "home";
+    const home = `<g data-travel="home" style="cursor:${atHome ? "default" : "pointer"}">
+      <title>Your Settlement — safe walls, hearth, forge and workshop</title>
+      <rect x="${hx - 13}" y="${hy - 11}" width="26" height="22" rx="2" fill="${atHome ? "#c8922e" : "#3a2c1c"}" stroke="${atHome ? "#fff2cf" : "#c8922e"}" stroke-width="2.5"/>
+      <path d="M${hx - 15} ${hy - 11} L${hx} ${hy - 20} L${hx + 15} ${hy - 11}" fill="none" stroke="${atHome ? "#fff2cf" : "#c8922e"}" stroke-width="2.5"/>
+      <text x="${hx}" y="${hy + 34}" text-anchor="middle" font-size="12" font-family="Cinzel, serif" fill="#e6dcc4">Settlement${atHome ? " · here" : ""}</text>
+    </g>`;
+
     this.travel.innerHTML =
-      `<style>.wrow{display:flex;align-items:center;gap:12px;padding:9px 4px;border-bottom:1px solid #1c1e20}</style>
-      <div class="hud-heading">The Ways ${atHome ? "" : "· abroad"}</div>
-      ${homeRow}${rows}
-      <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--ink-dim)">Time passes on the road. Return before the light fails. [Esc] close</div>`;
-    this.travel.querySelectorAll<HTMLElement>("button[data-travel]").forEach((el) => {
+      `<div class="hud-heading" style="text-align:center">The Vale — ${atHome ? "choose an expedition" : "return, or press on"}</div>` +
+      `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;background:radial-gradient(circle at 50% 45%, #2a2418, #1a160e);border:1px solid #4a3d2c;border-radius:4px" xmlns="http://www.w3.org/2000/svg">${roads}${home}${pins}</svg>` +
+      `<div style="text-align:center;margin-top:8px;font-size:12px;color:var(--ink-dim)">Time passes on the road — be home before the light fails. [Esc] close</div>`;
+
+    this.travel.querySelectorAll<SVGGElement>("g[data-travel]").forEach((el) => {
       el.onclick = () => this.handlers.onTravel(el.dataset["travel"]!);
     });
   }

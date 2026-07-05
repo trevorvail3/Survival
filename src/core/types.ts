@@ -181,7 +181,8 @@ export type PropKind =
   | "rock" // gather stone/iron (depletes + regrows)
   | "herbs" // gather herbs/food (depletes + regrows)
   | "survivor" // rescuable settlement member
-  | "waystone" // travel between the settlement and the regions
+  | "waystone" // return stone in the wilds (opens the map)
+  | "maptable" // the war map in the settlement (choose an expedition)
   | "gate"; // openable
 
 export interface Prop {
@@ -275,6 +276,9 @@ export interface RegionDef {
   enemyCount: number;
   /** A named boss that guards this region (once-per-run), if any. */
   boss?: EnemyKind;
+  /** Position on the war map, 0..1 (settlement sits at the centre). */
+  mx: number;
+  my: number;
 }
 
 /** A generated area's contents, cached so the home settlement persists. */
