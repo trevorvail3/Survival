@@ -18,7 +18,8 @@ import { Hud, type HudHandlers } from "./client/hud.ts";
 import { Input } from "./client/input.ts";
 import { Fx } from "./client/fx.ts";
 import { audio } from "./client/audio.ts";
-import { loadGame, clearSave, slotInfos, migrateLegacySave, getAccount, setAccount, SAVE_SLOTS, saveGame } from "./client/save.ts";
+import { loadGame, clearSave, slotInfos, migrateLegacySave, setAccount, setActiveAccount, SAVE_SLOTS, saveGame } from "./client/save.ts";
+import { initAccount, available as accountAvailable, currentAccount, signIn, signUp, signOut, type Account } from "./client/account.ts";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement | null;
 const hudRoot = document.getElementById("hud") as HTMLElement | null;
@@ -78,7 +79,7 @@ veil.innerHTML = `
   <div class="tagline">An Old Hold, and the Dead That Keep It</div>
   <div class="acct" id="acct"></div>
   <div class="lines" id="veilLines"></div>
-  <div class="char-select" id="charSelect"></div>
+  <div class="char-select" id="stage"></div>
   <div class="hint">
     Everything is a click — no keyboard needed. <b>Click</b> to move, fight, search and gather · <b>scroll or pinch</b> to zoom<br/>
     the tabs on the right open your <b>Pack</b>, <b>Skills</b>, <b>Settlement</b>, <b>Expedition</b> map and <b>Stash</b>
@@ -106,28 +107,74 @@ audio.setScene("menu");
 const dismiss = () => { clearInterval(cycleTimer); veil.style.opacity = "0"; veil.style.pointerEvents = "none"; window.setTimeout(() => veil.remove(), 1200); };
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] || c));
 
-// --- Account line (Ironvail). Local for now; the shape mirrors the shared
-// Ironvail account used across the Varath universe, ready to sync later. ---
 const acctEl = veil.querySelector<HTMLElement>("#acct")!;
-function renderAccount(): void {
-  const email = getAccount();
-  acctEl.innerHTML = email
-    ? `<span class="brand">IRONVAIL</span> · ${esc(email)} <button class="acctlink" id="acctChange">change</button>`
-    : `<span class="brand">IRONVAIL</span> · <button class="acctlink" id="acctChange">link account</button>`;
-  acctEl.querySelector<HTMLButtonElement>("#acctChange")!.onclick = () => {
-    const cur = getAccount();
-    const next = window.prompt("Ironvail account email (shared across the Varath universe):", cur) ?? cur;
-    setAccount(next.trim());
-    renderAccount();
-  };
-}
-renderAccount();
+const stageEl = veil.querySelector<HTMLElement>("#stage")!;
+let account: Account | null = null; // signed-in Ironvail account, else null (guest/offline)
 
-// --- Character slots ---
+// --- Account line: reflects signed-in / guest / offline state. ---
+function renderAccount(): void {
+  if (account) {
+    acctEl.innerHTML = `<span class="brand">IRONVAIL</span> · ${esc(account.email)} <button class="acctlink" id="acctOut">sign out</button>`;
+    acctEl.querySelector<HTMLButtonElement>("#acctOut")!.onclick = async () => { await signOut(); account = null; setActiveAccount(null); showSignIn(); };
+  } else if (accountAvailable()) {
+    acctEl.innerHTML = `<span class="brand">IRONVAIL</span> · <span style="color:var(--rust)">not signed in</span>`;
+  } else {
+    acctEl.innerHTML = `<span class="brand">IRONVAIL</span> · <span style="color:var(--ink-dim)">offline — playing locally</span>`;
+  }
+}
+
+// --- Sign-in / create-account screen (the shared Ironvail login). ---
+function showSignIn(): void {
+  setActiveAccount(null);
+  renderAccount();
+  stageEl.innerHTML = `
+    <div class="char-head">Sign in to Ironvail</div>
+    <div class="auth">
+      <input class="cinput" id="authEmail" type="email" placeholder="Email" autocomplete="email" />
+      <input class="cinput" id="authPass" type="password" placeholder="Password" autocomplete="current-password" />
+      <div class="autherr" id="authErr"></div>
+      <div class="authrow">
+        <button class="cbegin" id="authSignin">Sign In</button>
+        <button class="cbegin ghost" id="authSignup">Create Account</button>
+      </div>
+      <button class="acctlink" id="authGuest" style="margin-top:2px">Play offline instead</button>
+      <div style="font-size:11px;color:var(--ink-dim);margin-top:4px">One Ironvail account across the Varath universe.</div>
+    </div>`;
+  const email = stageEl.querySelector<HTMLInputElement>("#authEmail")!;
+  const pass = stageEl.querySelector<HTMLInputElement>("#authPass")!;
+  const err = stageEl.querySelector<HTMLElement>("#authErr")!;
+  const busy = (b: boolean, label: string) => { const s = stageEl.querySelector<HTMLButtonElement>("#authSignin")!, u = stageEl.querySelector<HTMLButtonElement>("#authSignup")!; s.disabled = b; u.disabled = b; if (b) err.textContent = label; };
+  const doAuth = async (create: boolean) => {
+    const e = email.value.trim(), p = pass.value;
+    if (!e || !p) { err.textContent = "Enter an email and password."; return; }
+    err.style.color = "var(--ink-dim)";
+    busy(true, create ? "Creating account…" : "Signing in…");
+    const res = create ? await signUp(e, p) : await signIn(e, p);
+    busy(false, "");
+    err.style.color = "var(--rust)";
+    if (res.error) { err.textContent = res.error; return; }
+    if ("confirm" in res && res.confirm) { err.style.color = "var(--ink-dim)"; err.textContent = "Check your email to confirm, then sign in."; return; }
+    if (res.account) enterAccount(res.account);
+  };
+  stageEl.querySelector<HTMLButtonElement>("#authSignin")!.onclick = () => doAuth(false);
+  stageEl.querySelector<HTMLButtonElement>("#authSignup")!.onclick = () => doAuth(true);
+  stageEl.querySelector<HTMLButtonElement>("#authGuest")!.onclick = () => { account = null; setActiveAccount(null); renderAccount(); showSlots(); };
+  pass.onkeydown = (ev) => { if (ev.key === "Enter") doAuth(false); };
+}
+
+function enterAccount(acc: Account): void {
+  account = acc;
+  setActiveAccount(acc.id);
+  setAccount(acc.email);
+  renderAccount();
+  showSlots();
+}
+
+// --- Character slots (per account / guest). ---
 function startNew(slot: number, name: string): void {
   const seed = seedParam ? Number(seedParam) >>> 0 : Date.now() >>> 0;
   const world = createWorld(content, mulberry32(seed));
-  saveGame(world, seed, slot, name); // stamp the slot immediately
+  saveGame(world, seed, slot, name);
   dismiss();
   begin(world, seed, slot, name);
 }
@@ -137,11 +184,9 @@ function continueSlot(slot: number): void {
   dismiss();
   begin(s.world, s.seed, slot, s.name);
 }
-
-const selEl = veil.querySelector<HTMLElement>("#charSelect")!;
-function renderSlots(): void {
+function showSlots(): void {
   const infos = slotInfos();
-  selEl.innerHTML = `<div class="char-head">Choose your Warden</div><div class="char-slots">${
+  stageEl.innerHTML = `<div class="char-head">Choose your Warden</div><div class="char-slots">${
     infos.map((info, i) => info
       ? `<div class="cslot filled" data-continue="${i}">
            <button class="cdel" data-del="${i}" title="Delete this warden">✕</button>
@@ -155,14 +200,13 @@ function renderSlots(): void {
          </div>`
     ).join("")
   }</div>`;
-
-  selEl.querySelectorAll<HTMLElement>("[data-continue]").forEach((el) => {
+  stageEl.querySelectorAll<HTMLElement>("[data-continue]").forEach((el) => {
     el.onclick = (e) => { if ((e.target as HTMLElement).dataset["del"]) return; continueSlot(Number(el.dataset["continue"])); };
   });
-  selEl.querySelectorAll<HTMLButtonElement>("[data-del]").forEach((el) => {
-    el.onclick = (e) => { e.stopPropagation(); const i = Number(el.dataset["del"]); if (window.confirm("Permanently delete this warden? This cannot be undone.")) { clearSave(i); renderSlots(); } };
+  stageEl.querySelectorAll<HTMLButtonElement>("[data-del]").forEach((el) => {
+    el.onclick = (e) => { e.stopPropagation(); const i = Number(el.dataset["del"]); if (window.confirm("Permanently delete this warden? This cannot be undone.")) { clearSave(i); showSlots(); } };
   });
-  selEl.querySelectorAll<HTMLElement>("[data-new]").forEach((el) => {
+  stageEl.querySelectorAll<HTMLElement>("[data-new]").forEach((el) => {
     el.onclick = () => openNewForm(Number(el.dataset["new"]), el);
   });
 }
@@ -177,4 +221,17 @@ function openNewForm(slot: number, card: HTMLElement): void {
   card.querySelector<HTMLButtonElement>(".cbegin")!.onclick = go;
 }
 void SAVE_SLOTS;
-renderSlots();
+
+// --- Boot routing: sign-in if accounts are available, else offline slots. ---
+async function boot(): Promise<void> {
+  initAccount();
+  renderAccount();
+  if (accountAvailable()) {
+    const existing = await currentAccount();
+    if (existing) { enterAccount(existing); return; }
+    showSignIn();
+  } else {
+    showSlots(); // offline / guest
+  }
+}
+void boot();
