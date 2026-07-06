@@ -37,7 +37,7 @@ import { computeMods, nodeUnlocked, SKILLS, xpForNext } from "../content/skills.
 import type { Mods } from "../content/skills.ts";
 import { levelForXp, SKILL_META } from "../content/trainskills.ts";
 import type { SkillId } from "../content/trainskills.ts";
-import { weaponDamage, armorSoak, characterPower, rollRarity, rollPower, rarityOf, RARITIES, type Rarity } from "../content/gear.ts";
+import { weaponDamage, armorSoak, characterPower, rollRarity, rollPower, rarityOf, isArmorSlot, isGearDef, ARMOR_SLOTS, RARITIES, type Rarity } from "../content/gear.ts";
 
 export const PLAYER_RADIUS = 0.34;
 export const INV_COLS = 6;
@@ -163,7 +163,12 @@ export function addItem(player: Player, content: Content, id: ItemId, qty: numbe
 /** True for gear instances — unique, never stack, carry Power/rarity. */
 function isGearSlot(content: Content, s: InvSlot): boolean {
   const def = content.items[s.id];
-  return s.power !== undefined || def?.slot === "body" || !!def?.weapon;
+  return s.power !== undefined || isGearDef(def);
+}
+
+/** The equipped armour pieces as an ordered array (for Power / soak sums). */
+function armorArray(p: Player): (InvSlot | null)[] {
+  return ARMOR_SLOTS.map((slot) => p.armor[slot]);
 }
 
 /** Deposit a pack slot into the settlement stash. */
@@ -263,7 +268,7 @@ export function grantSkillXp(world: World, id: SkillId, amount: number, out: Gam
 
 /** Character Power (gear score) — the Destiny-style striving number. */
 export function playerPower(world: World): number {
-  return characterPower(world.player.equipped, world.player.armor);
+  return characterPower(world.player.equipped, armorArray(world.player));
 }
 
 /** The recommended Power of the zone you're in (0 at the safe home base). */
@@ -328,7 +333,7 @@ export function createWorld(content: Content, rng: () => number): World {
     order: { type: "none" },
     inv,
     equipped: { id: "rusty_sword", qty: 1 },
-    armor: null,
+    armor: { head: null, body: null, hands: null, legs: null, feet: null },
     nextAttack: 0,
     infection: 0,
     alive: true,
@@ -593,7 +598,8 @@ function attackTarget(world: World, content: Content, ctx: { rng: () => number }
   const p = world.player;
   const def = (p.equipped ? content.items[p.equipped.id] : undefined) ?? content.items["fists"]!;
   const wep = def.weapon ?? content.items["fists"]!.weapon!;
-  if (wep.kind === "bow") {
+  const ranged = !!wep.ammo; // bows AND crossbows are ranged; they burn ammo
+  if (ranged) {
     if (countItem(p, wep.ammo!) <= 0) { out.push({ t: "noammo" }); return; }
     removeItem(p, wep.ammo!, 1);
     out.push({ t: "bowshot", x: p.pos.x, y: p.pos.y });
@@ -605,22 +611,26 @@ function attackTarget(world: World, content: Content, ctx: { rng: () => number }
   const f = combatFactors(world);
   // Damage comes from GEAR (weapon Power × rarity) and perks — not combat XP —
   // then scaled by how your Power compares to the region's recommended Power.
-  const crit = ctx.rng() < m.critChance;
+  // Each weapon adds its own character: daggers/rapiers fish crits, maces/axes/
+  // crossbows pierce armour, great weapons and polearms cleave.
+  const pen = m.armorPen + (wep.armorPen ?? 0);
+  const crit = ctx.rng() < m.critChance + (wep.crit ?? 0);
   const berserk = p.hp / p.maxHp < 0.4 ? 1 + m.lowHpDmg : 1; // Berserker
   let dmg = Math.round(weaponDamage(def, p.equipped) * m.meleeMult * berserk * f.deal * (0.85 + ctx.rng() * 0.3) * (crit ? 1.8 : 1));
-  dmg = Math.max(1, dmg - Math.max(0, eDef.armor - m.armorPen));
+  dmg = Math.max(1, dmg - Math.max(0, eDef.armor - pen));
   damageEnemy(world, content, ctx, e, dmg, crit, out);
   // Knockback + brief stagger on solid hits.
   const kl = Math.hypot(e.pos.x - p.pos.x, e.pos.y - p.pos.y) || 1;
   e.pos.x += ((e.pos.x - p.pos.x) / kl) * 0.2;
   e.pos.y += ((e.pos.y - p.pos.y) / kl) * 0.2;
   e.staggerUntil = world.clock + 220;
-  // Cleave: the blow carries to every foe within reach around you.
-  if (m.cleave && wep.kind !== "bow") {
+  // Cleave: the blow carries to every foe within reach around you — granted by
+  // the Cleave perk OR a cleaving weapon (great weapons, polearms). Never ranged.
+  if ((m.cleave || wep.cleave) && !ranged) {
     for (const o of world.enemies) {
       if (o === e || o.state === "dead") continue;
       if (Math.hypot(o.pos.x - p.pos.x, o.pos.y - p.pos.y) <= wep.reach + 0.6) {
-        const od = Math.max(1, Math.round(dmg * 0.5) - Math.max(0, content.enemies[o.kind].armor - m.armorPen));
+        const od = Math.max(1, Math.round(dmg * 0.5) - Math.max(0, content.enemies[o.kind].armor - pen));
         damageEnemy(world, content, ctx, o, od, false, out);
       }
     }
@@ -672,7 +682,7 @@ let gearPoolCache: ItemId[] | null = null;
 function gearPool(content: Content): ItemId[] {
   if (!gearPoolCache) {
     gearPoolCache = Object.values(content.items)
-      .filter((i) => i.id !== "fists" && (i.slot === "body" || (i.slot === "weapon" && !!i.weapon)))
+      .filter((i) => i.id !== "fists" && (isArmorSlot(i.slot) || (i.slot === "weapon" && !!i.weapon)))
       .map((i) => i.id);
   }
   return gearPoolCache;
@@ -740,10 +750,15 @@ function attackPlayer(world: World, content: Content, e: Enemy, out: GameEvent[]
   const p = world.player;
   if (world.clock < p.invulnUntil) return; // dodged — no damage
   const eDef = content.enemies[e.kind];
-  // Mitigation comes from your equipped armour (its Power × rarity) and perks;
-  // the region's Power gap scales incoming damage (under-Power hurts).
-  const bodyDef = p.armor ? content.items[p.armor.id] : undefined;
-  const armorVal = bodyDef ? armorSoak(bodyDef, p.armor) : 0;
+  // Mitigation is the sum of every equipped armour piece (each its base soak ×
+  // rarity + Power) plus perks; the region's Power gap scales incoming damage
+  // (under-Power hurts). A full head-to-toe set soaks far more than one piece.
+  let armorVal = 0;
+  for (const slot of ARMOR_SLOTS) {
+    const a = p.armor[slot];
+    const aDef = a ? content.items[a.id] : undefined;
+    if (a && aDef) armorVal += armorSoak(aDef, a);
+  }
   const take = combatFactors(world).take;
   const dmg = Math.max(1, Math.round(eDef.damage * take * (0.9 + Math.random() * 0.2)) - armorVal - playerMods(p).dmgReduce);
   p.hp -= dmg;
@@ -891,7 +906,7 @@ export function dismantle(world: World, content: Content, slotIndex: number, out
   const slot = p.inv[slotIndex];
   if (!slot) return false;
   const def = content.items[slot.id];
-  if (!def || !(def.slot === "body" || def.weapon)) return false; // gear only
+  if (!isGearDef(def)) return false; // gear only
   const yld = dismantleYield(content, slot, world.zoneId === "home");
   p.inv[slotIndex] = null;
   const left = addItem(p, content, yld.id, yld.qty);
@@ -921,15 +936,15 @@ export function useSlot(world: World, content: Content, slotIndex: number, out: 
       if (def.heal) p.hp = Math.min(p.maxHp, p.hp + def.heal * heal);
       removeItem(p, slot.id, 1); out.push({ t: "cure" }); break;
     case "equip": {
-      if (def.slot !== "body" && !def.weapon) break;
-      const isBody = def.slot === "body";
-      const prev = isBody ? p.armor : p.equipped;
-      // Move the pack instance into the equip slot (gear is unique, qty 1).
+      const armorSlot = isArmorSlot(def.slot) ? def.slot : null;
+      if (!armorSlot && !def.weapon) break;
+      const prev = armorSlot ? p.armor[armorSlot] : p.equipped;
+      // Move the pack instance into the matching equip slot (gear is unique, qty 1).
       const inst: InvSlot = { id: slot.id, qty: 1 };
       if (slot.power !== undefined) inst.power = slot.power;
       if (slot.rarity !== undefined) inst.rarity = slot.rarity;
       p.inv[slotIndex] = null;
-      if (isBody) p.armor = inst; else p.equipped = inst;
+      if (armorSlot) p.armor[armorSlot] = inst; else p.equipped = inst;
       if (prev) placeInstance(world, prev); // return the old gear to the pack
       out.push({ t: "equip" });
       break;
@@ -982,7 +997,7 @@ export function craft(world: World, content: Content, recipeId: string, out: Gam
   if (!r || !canCraft(world, content, recipeId)) return false;
   for (const i of r.inputs) removeItem(world.player, i.id, i.qty);
   const outDef = content.items[r.out]!;
-  if (outDef.slot === "body" || outDef.weapon) {
+  if (isGearDef(outDef)) {
     // Crafted gear is a reliable COMMON floor — its Power scales with your
     // processing skill so you're never weaponless. The rarity chase (and the
     // higher Power) still comes from expedition drops.
@@ -1110,7 +1125,7 @@ export function tick(world: World, content: Content, ctx: { now: number; rng: ()
   for (const g of world.ground) {
     if (Math.hypot(g.pos.x - p.pos.x, g.pos.y - p.pos.y) < 0.6) {
       const def = content.items[g.item.id];
-      const isGear = g.item.power !== undefined || def?.slot === "body" || !!def?.weapon;
+      const isGear = g.item.power !== undefined || isGearDef(def);
       if (isGear) {
         // Gear is a unique instance — keep its Power/rarity, never stack it.
         // Only collect if there's a free slot, else leave it to grab later.

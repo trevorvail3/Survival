@@ -107,6 +107,28 @@ function draw(shape: string, p: Pal, id: string): string {
         `<rect x="13.5" y="16" width="5" height="6" rx="1" fill="${gold}"/><circle cx="16" cy="19" r="1.2" fill="${p.edge}"/>` +
         `<path d="M9,13 Q16,15 23,13" stroke="${p.light}" stroke-width="0.8" fill="none" opacity="0.5"/>`;
     }
+    // --- Expanded weapon silhouettes ---
+    case "dagger":
+      return `<g transform="rotate(${40 + r} 16 16)"><polygon points="16,4 17.4,9 17.4,18 14.6,18 14.6,9" fill="${p.base}" stroke="${p.edge}" stroke-width="1" stroke-linejoin="round"/><line x1="16" y1="6" x2="16" y2="17" stroke="${p.light}" stroke-width="0.7" opacity="0.7"/><rect x="11.5" y="18" width="9" height="2.2" rx="1" fill="#7a6038"/><rect x="15" y="20" width="2" height="5" fill="${WOOD}"/></g>`;
+    case "greatsword":
+      return `<g transform="rotate(${40 + r} 16 16)"><polygon points="16,1 18.4,6 18.4,20 13.6,20 13.6,6" fill="${p.base}" stroke="${p.edge}" stroke-width="1" stroke-linejoin="round"/><line x1="16" y1="3" x2="16" y2="19" stroke="${p.light}" stroke-width="1" opacity="0.7"/><rect x="8" y="20" width="16" height="2.8" rx="1" fill="#7a6038"/><rect x="15" y="22" width="2" height="8" fill="${WOOD}"/><circle cx="16" cy="30" r="1.8" fill="#7a6038"/></g>`;
+    case "greataxe":
+      return `<g transform="rotate(${30 + r} 16 16)"><rect x="14.5" y="3" width="3" height="26" rx="1" fill="${WOOD}" stroke="${WOODX}" stroke-width="0.8"/><path d="M14.5,4 Q3,6 5,17 Q13,15 16,20 Z" fill="${p.base}" stroke="${p.edge}" stroke-width="1" stroke-linejoin="round"/><path d="M17.5,4 Q29,6 27,17 Q19,15 16,20 Z" fill="${p.dark}" stroke="${p.edge}" stroke-width="1" stroke-linejoin="round"/></g>`;
+    case "warhammer":
+      return `<g transform="rotate(${40 + r} 16 16)"><rect x="14.5" y="10" width="3" height="19" rx="1" fill="${WOOD}" stroke="${WOODX}" stroke-width="0.8"/><rect x="8" y="4" width="16" height="9" rx="1.5" fill="${p.base}" stroke="${p.edge}" stroke-width="1.1"/><rect x="8" y="6.5" width="16" height="1.6" fill="${p.dark}" opacity="0.6"/><polygon points="24,5 28,8.5 24,12" fill="${p.dark}"/></g>`;
+    case "halberd":
+      return `<g transform="rotate(${45 + r} 16 16)"><rect x="15" y="6" width="2" height="24" fill="${WOOD}" stroke="${WOODX}" stroke-width="0.6"/><polygon points="16,1 18,7 16,9 14,7" fill="${p.base}" stroke="${p.edge}" stroke-width="0.8"/><path d="M17,7 Q25,6 24,13 Q19,12 16,13 Z" fill="${p.base}" stroke="${p.edge}" stroke-width="0.9"/><path d="M15,9 Q9,10 10,14" stroke="${p.dark}" stroke-width="1.4" fill="none"/></g>`;
+    case "crossbow":
+      return `<g transform="rotate(${r} 16 16)"><rect x="14.5" y="8" width="3" height="18" rx="1" fill="${WOOD}" stroke="${WOODX}" stroke-width="0.8"/><path d="M4,12 Q16,8 28,12" fill="none" stroke="${p.base}" stroke-width="2.6" stroke-linecap="round"/><line x1="4" y1="12" x2="28" y2="12" stroke="${p.light}" stroke-width="0.8" opacity="0.7"/><polygon points="16,8 18,12 14,12" fill="${p.dark}"/></g>`;
+    // --- Armour silhouettes by slot ---
+    case "helm":
+      return `<path d="M7,15 Q7,5 16,5 Q25,5 25,15 L25,20 Q25,24 16,24 Q7,24 7,20 Z" fill="${p.base}" stroke="${p.edge}" stroke-width="1.2"/><rect x="14.5" y="12" width="3" height="12" fill="${p.dark}"/><rect x="9" y="13" width="14" height="2.4" fill="${p.dark}" opacity="0.7"/><path d="M10,10 Q16,7 22,10" stroke="${p.light}" stroke-width="1" fill="none" opacity="0.5"/>`;
+    case "gauntlet":
+      return `<path d="M10,10 L18,10 Q22,10 22,14 L22,17 L25,15 L25,20 L22,20 L22,23 Q22,26 18,26 L12,26 Q9,26 9,22 L9,13 Q9,10 10,10 Z" fill="${p.base}" stroke="${p.edge}" stroke-width="1.1" stroke-linejoin="round"/><path d="M11,14 H20 M11,17 H20 M11,20 H20" stroke="${p.dark}" stroke-width="0.8" opacity="0.6"/>`;
+    case "greaves":
+      return `<path d="M11,4 Q20,4 20,10 L19,20 Q19,26 15,28 L11,28 Q13,22 12,16 Q11,10 11,4 Z" fill="${p.base}" stroke="${p.edge}" stroke-width="1.1" stroke-linejoin="round"/><path d="M13,8 Q17,9 18,13 M12,15 Q16,16 18,19" stroke="${p.light}" stroke-width="0.9" fill="none" opacity="0.5"/>`;
+    case "boots":
+      return `<path d="M11,4 L18,4 L18,18 L26,18 Q28,18 28,22 L28,26 L9,26 L9,8 Q9,4 11,4 Z" fill="${p.base}" stroke="${p.edge}" stroke-width="1.1" stroke-linejoin="round"/><rect x="9" y="24" width="19" height="2.6" fill="${p.dark}"/><path d="M12,10 H16 M12,14 H16" stroke="${p.dark}" stroke-width="0.8" opacity="0.6"/>`;
     default:
       return `<circle cx="16" cy="16" r="9" fill="${p.base}" stroke="${p.edge}" stroke-width="1.4"/><circle cx="13" cy="13" r="3" fill="${p.light}" opacity="0.6"/>`;
   }

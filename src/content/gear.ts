@@ -11,10 +11,20 @@
  * `rarity` fields) and its static ItemDef (base damage / armour / archetype).
  */
 
-import type { InvSlot, ItemDef } from "../core/types.ts";
+import type { ArmorSlot, InvSlot, ItemDef } from "../core/types.ts";
 
 export type Rarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 export const RARITIES: Rarity[] = ["common", "uncommon", "rare", "epic", "legendary"];
+
+/** The five armour slots, in head-to-toe order (for stable UI + iteration). */
+export const ARMOR_SLOTS: ArmorSlot[] = ["head", "body", "hands", "legs", "feet"];
+export function isArmorSlot(slot: string | undefined): slot is ArmorSlot {
+  return !!slot && (ARMOR_SLOTS as string[]).includes(slot);
+}
+/** True for any equippable gear def — a weapon or a piece of armour. */
+export function isGearDef(def: ItemDef | undefined): boolean {
+  return !!def && (!!def.weapon || isArmorSlot(def.slot));
+}
 
 export interface RarityMeta {
   name: string;
@@ -84,7 +94,12 @@ export function slotPower(slot: InvSlot | null | undefined): number {
   return slot.power ?? 4; // un-rolled starter gear sits at a low floor
 }
 
-/** Character Power = the average of equipped weapon + body Power (Destiny-style). */
-export function characterPower(weapon: InvSlot | null, body: InvSlot | null): number {
-  return Math.round((slotPower(weapon) + slotPower(body)) / 2);
+/** Character Power (gear score) = the average Power of everything you have
+ *  equipped — the weapon plus whichever armour slots are filled (Destiny-style
+ *  "average of what you have equipped"). Empty slots don't drag it down; you
+ *  raise it by equipping higher-Power pieces. */
+export function characterPower(weapon: InvSlot | null, armor: (InvSlot | null)[]): number {
+  const worn = [weapon, ...armor].filter((s): s is InvSlot => !!s);
+  if (worn.length === 0) return 0;
+  return Math.round(worn.reduce((n, s) => n + slotPower(s), 0) / worn.length);
 }
