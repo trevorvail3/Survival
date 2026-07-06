@@ -251,14 +251,6 @@ export interface Player {
   nextAttack: number;
   infection: number;
   alive: boolean;
-  // --- Active defense (dodge) ---
-  /** ms clock time i-frames end (no damage taken while active). */
-  invulnUntil: number;
-  /** ms clock time the dash movement ends. */
-  dashUntil: number;
-  /** ms clock time the dodge is off cooldown. */
-  dashReadyAt: number;
-  dashDir: Vec2;
   // --- RPG progression ---
   level: number;
   xp: number;

@@ -36,9 +36,6 @@ export function loadGame(): { seed: number; world: World } | null {
     if (blob.v !== SAVE_VERSION || !blob.world || typeof blob.seed !== "number") return null;
     // Backfill fields added after this save version so older runs keep working.
     const pl = blob.world.player as unknown as Record<string, unknown>;
-    if (typeof pl["invulnUntil"] !== "number") {
-      pl["invulnUntil"] = 0; pl["dashUntil"] = 0; pl["dashReadyAt"] = 0; pl["dashDir"] = { x: 1, y: 0 };
-    }
     if (typeof pl["trained"] !== "object" || pl["trained"] === null) pl["trained"] = {};
     // equipped/armor became gear instances (were bare item ids).
     if (typeof pl["equipped"] === "string") pl["equipped"] = { id: pl["equipped"], qty: 1 };
