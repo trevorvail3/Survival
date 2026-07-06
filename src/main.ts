@@ -31,7 +31,10 @@ const fx = new Fx();
 
 // The HUD needs handlers that live on the Game; the Game needs the HUD. Wire the
 // HUD to a lazy delegate so clicks route to the Game once it exists.
-let gameHandlers: HudHandlers | null = null;
+// The Game supplies every in-world handler; the account actions (sign out /
+// switch character) are app-level and implemented on the delegate below.
+let gameHandlers: Omit<HudHandlers, "onSignOut" | "onSwitchCharacter"> | null = null;
+let currentGame: Game | null = null;
 const handlers: HudHandlers = {
   onCraft: (r) => gameHandlers?.onCraft(r),
   onBuild: (id) => gameHandlers?.onBuild(id),
@@ -51,6 +54,12 @@ const handlers: HudHandlers = {
   onToggleStash: () => gameHandlers?.onToggleStash(),
   onDismantle: (i) => gameHandlers?.onDismantle(i),
   onDecrypt: (i) => gameHandlers?.onDecrypt(i),
+  onToggleSettings: () => gameHandlers?.onToggleSettings(),
+  // Account actions are app-level, not the Game's. Save (flushing to cloud by
+  // resetting the throttle), then reload — boot() re-routes to sign-in (signed
+  // out) or the character select (still signed in).
+  onSignOut: () => { lastCloud = 0; currentGame?.save(); window.setTimeout(async () => { await signOut(); setActiveAccount(null); location.reload(); }, 500); },
+  onSwitchCharacter: () => { lastCloud = 0; currentGame?.save(); window.setTimeout(() => location.reload(), 400); },
 };
 const hud = new Hud(hudRoot, content, handlers);
 hudRoot.style.display = "none"; // stay hidden behind the title until a run begins
@@ -60,6 +69,8 @@ function begin(world: World, seed: number, slot: number, name: string): void {
   hudRoot!.style.display = "";
   const rng = mulberry32(seed);
   const game = new Game(canvas!, world, content, rng, input, hud, fx, seed, slot, name);
+  currentGame = game;
+  hud.setAccount(account ? account.email : null); // shown in Settings
   gameHandlers = game.handlers();
   window.addEventListener("beforeunload", () => game.save());
   audio.unlock();

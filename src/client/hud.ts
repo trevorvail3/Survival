@@ -38,6 +38,9 @@ export interface HudHandlers {
   onToggleStash: () => void;
   onDismantle: (slotIndex: number) => void;
   onDecrypt: (slotIndex: number) => void;
+  onToggleSettings: () => void;
+  onSignOut: () => void;
+  onSwitchCharacter: () => void;
 }
 
 const ROLE_INFO: Record<SettlerRole, { name: string; glyph: string; effect: string }> = {
@@ -92,10 +95,13 @@ export class Hud {
   private inspectEl: HTMLElement;
   private inspectTimer = 0;
   private audioBtn: HTMLButtonElement;
-  private mode: "none" | "pack" | "settle" | "travel" | "skills" | "stash" = "none";
+  private mode: "none" | "pack" | "settle" | "travel" | "skills" | "stash" | "settings" = "none";
   /** The docked side for all modal panels (flippable via the ⇄ control). */
   private panelSide: "left" | "right" = "left";
   private modalPanels: HTMLElement[] = [];
+  private settingsP!: HTMLElement;
+  /** The signed-in Ironvail email, or null for guest/offline. */
+  private accountLabel: string | null = null;
   private near: NearStations = { forge: false, workshop: false, townboard: false, maptable: false };
   private log: string[] = [];
   private tipTimer = 0;
@@ -105,7 +111,7 @@ export class Hud {
   /** Last rendered hotbar signature (item:qty,...), to skip no-op rebuilds. */
   private hotbarSig = "";
   /** Tab-bar buttons keyed by the mode they open, for active-tab highlighting. */
-  private tabButtons: Partial<Record<"pack" | "settle" | "travel" | "skills" | "stash", HTMLButtonElement>> = {};
+  private tabButtons: Partial<Record<"pack" | "settle" | "travel" | "skills" | "stash" | "settings", HTMLButtonElement>> = {};
   private mmCanvas: HTMLCanvasElement;
 
   constructor(private root: HTMLElement, private content: Content, private handlers: HudHandlers) {
@@ -127,7 +133,8 @@ export class Hud {
     this.travel = this.panel({ ...dock });
     this.skillsP = this.panel({ ...dock });
     this.stashP = this.panel({ ...dock });
-    this.modalPanels = [this.pack, this.settle, this.travel, this.skillsP, this.stashP];
+    this.settingsP = this.panel({ ...dock });
+    this.modalPanels = [this.pack, this.settle, this.travel, this.skillsP, this.stashP, this.settingsP];
     this.applyPanelSide();
 
     this.bossBar = this.floating({ left: "50%", top: "64px", transform: "translateX(-50%)", width: "min(440px,72vw)", display: "none", textAlign: "center" });
@@ -193,12 +200,13 @@ export class Hud {
    *  clicking here. There is no keyboard control surface and no device-specific
    *  gating: the same buttons serve mouse and touch. */
   private buildTabBar(): void {
-    const TABS: { mode: "pack" | "settle" | "travel" | "skills" | "stash"; glyphName: string; label: string; onTap: () => void }[] = [
+    const TABS: { mode: "pack" | "settle" | "travel" | "skills" | "stash" | "settings"; glyphName: string; label: string; onTap: () => void }[] = [
       { mode: "pack", glyphName: "backpack", label: "Pack", onTap: () => this.handlers.onTogglePack() },
       { mode: "skills", glyphName: "sword", label: "Skills", onTap: () => this.handlers.onToggleSkills() },
       { mode: "settle", glyphName: "home", label: "Settlement", onTap: () => this.handlers.onToggleSettlement() },
       { mode: "travel", glyphName: "map", label: "Expedition", onTap: () => this.handlers.onToggleTravel() },
       { mode: "stash", glyphName: "box", label: "Stash", onTap: () => this.handlers.onToggleStash() },
+      { mode: "settings", glyphName: "gear", label: "Settings", onTap: () => this.handlers.onToggleSettings() },
     ];
     const bar = document.createElement("div");
     Object.assign(bar.style, {
@@ -276,6 +284,7 @@ export class Hud {
     this.travel.style.display = this.mode === "travel" ? "block" : "none";
     this.skillsP.style.display = this.mode === "skills" ? "block" : "none";
     this.stashP.style.display = this.mode === "stash" ? "block" : "none";
+    this.settingsP.style.display = this.mode === "settings" ? "block" : "none";
     this.backdrop.style.display = this.mode === "none" ? "none" : "block";
     this.dirty = true;
     this.updateTabHighlight();
@@ -285,6 +294,9 @@ export class Hud {
   toggleSettlement(): void { this.mode = this.mode === "settle" ? "none" : "settle"; this.show(); }
   toggleTravel(): void { this.mode = this.mode === "travel" ? "none" : "travel"; this.show(); }
   toggleStash(): void { this.mode = this.mode === "stash" ? "none" : "stash"; this.show(); }
+  toggleSettings(): void { this.mode = this.mode === "settings" ? "none" : "settings"; this.show(); }
+  /** The signed-in Ironvail email shown in Settings (null = guest/offline). */
+  setAccount(label: string | null): void { this.accountLabel = label; this.markDirty(); }
   openPack(): void { this.mode = "pack"; this.show(); }
   openSettlement(): void { this.mode = "settle"; this.show(); }
   openTravel(): void { this.mode = "travel"; this.show(); }
@@ -487,8 +499,38 @@ export class Hud {
       else if (this.mode === "travel") this.renderTravel(world);
       else if (this.mode === "skills") this.renderSkills(world);
       else if (this.mode === "stash") this.renderStash(world);
+      else if (this.mode === "settings") this.renderSettings();
       this.dirty = false;
     }
+  }
+
+  private renderSettings(): void {
+    const signedIn = !!this.accountLabel;
+    const acct = signedIn
+      ? `<span style="color:var(--amber)">IRONVAIL</span> · ${this.accountLabel}`
+      : `<span style="color:var(--amber)">IRONVAIL</span> · <span style="color:var(--ink-dim)">offline — playing locally</span>`;
+    const muted = audio.getMuted();
+    this.settingsP.innerHTML =
+      `<style>
+        #hud-settings .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 4px;border-bottom:1px solid #1c1e20}
+        #hud-settings .lbl{color:var(--ink)}
+        #hud-settings .sub{font-size:11px;color:var(--ink-dim)}
+        #hud-settings .act{min-width:96px;text-align:center}
+      </style>
+      <div id="hud-settings">
+        <div class="hud-heading">Settings</div>
+        <div class="row"><div><div class="lbl">Account</div><div class="sub">${acct}</div></div></div>
+        <div class="row"><div class="lbl">Sound</div><button class="act" id="setSound">${muted ? "Off" : "On"}</button></div>
+        <div class="row"><div><div class="lbl">Switch Warden</div><div class="sub">Save and return to character select</div></div><button class="act" id="setSwitch">Switch</button></div>
+        ${signedIn ? `<div class="row"><div><div class="lbl">Sign Out</div><div class="sub">Leave your Ironvail account on this device</div></div><button class="act" id="setSignout" style="border-color:var(--rust);color:var(--rust)">Sign Out</button></div>` : ""}
+        <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--ink-dim)">One Ironvail account across the Varath universe.</div>
+      </div>`;
+    const sound = this.settingsP.querySelector<HTMLButtonElement>("#setSound");
+    if (sound) sound.onclick = () => { audio.setMuted(!audio.getMuted()); this.markDirty(); this.audioBtn.innerHTML = ico(audio.getMuted() ? "mute" : "sound"); };
+    this.settingsP.querySelector<HTMLButtonElement>("#setSwitch")!.onclick = () => this.handlers.onSwitchCharacter();
+    const out = this.settingsP.querySelector<HTMLButtonElement>("#setSignout");
+    if (out) out.onclick = () => this.handlers.onSignOut();
+    this.addClose(this.settingsP);
   }
 
   private renderStash(world: World): void {
