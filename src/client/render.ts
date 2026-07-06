@@ -89,6 +89,50 @@ function tileAt(world: World, x: number, y: number): TileType {
   return world.map.tiles[y * world.map.w + x]!;
 }
 
+// --- Organic ground blending (technique lifted from the sibling `world`
+// project's renderer) -------------------------------------------------------
+// Painting each tile a single flat colour reads as a hard checkerboard where
+// loose ground types meet. Instead each tile is filled as four corner-keyed
+// sub-quads; a corner takes the averaged colour of the (up to) four tiles that
+// share it, so neighbouring patches of grass/dirt/path/etc melt into one
+// another with no seams, at zero extra texture cost. Built/blocking surfaces
+// (wall, gate, cobble, stonefloor, water, forest) keep their own crisp,
+// hand-tuned painters below and are untouched by this.
+const BLEND_GROUND = new Set<TileType>(["grass", "dirt", "path", "field", "rubble", "grave", "blood"]);
+
+/** Corner-shared noise: identical for every tile meeting at (x,y), so shading
+ *  is seamless across the grid rather than jittering per tile. */
+function cornerNoise(x: number, y: number): number {
+  return (hashStr(`c${x},${y}`) & 0xff) / 255;
+}
+
+/** The blended colour at one corner of tile (x,y): the average of the same-
+ *  family neighbours meeting there (others count as the tile's own colour). */
+function cornerColor(world: World, x: number, y: number, cx: 0 | 1, cy: 0 | 1, self: TileType, family: Set<TileType>, noiseAmp: number): string {
+  const selfRGB = tileRGB(TILE_COLORS[self][0]);
+  let r = 0, gg = 0, b = 0;
+  for (const dy of [cy - 1, cy]) {
+    for (const dx of [cx - 1, cx]) {
+      const t = tileAt(world, x + dx, y + dy);
+      const c = family.has(t) ? tileRGB(TILE_COLORS[t][0]) : selfRGB;
+      r += c[0]; gg += c[1]; b += c[2];
+    }
+  }
+  const n = (cornerNoise(x + cx, y + cy) - 0.5) * noiseAmp;
+  return `rgb(${clamp(r / 4 + n)},${clamp(gg / 4 + n)},${clamp(b / 4 + n)})`;
+}
+
+/** Fill a tile as four corner-keyed sub-quads instead of one flat rect. */
+function paintBlendedBase(g: CanvasRenderingContext2D, world: World, tile: TileType, px: number, py: number, x: number, y: number): void {
+  const half = TILE / 2;
+  for (const cy of [0, 1] as const) {
+    for (const cx of [0, 1] as const) {
+      g.fillStyle = cornerColor(world, x, y, cx, cy, tile, BLEND_GROUND, 22);
+      g.fillRect(px + cx * half, py + cy * half, half, half);
+    }
+  }
+}
+
 function paintTile(g: CanvasRenderingContext2D, world: World, x: number, y: number): void {
   const t = tileAt(world, x, y);
   const [base] = TILE_COLORS[t];
@@ -120,8 +164,8 @@ function paintTile(g: CanvasRenderingContext2D, world: World, x: number, y: numb
     return;
   }
 
-  g.fillStyle = `rgb(${clamp(r + n)},${clamp(gg + n)},${clamp(b + n)})`;
-  g.fillRect(px, py, TILE, TILE);
+  if (BLEND_GROUND.has(t)) paintBlendedBase(g, world, t, px, py, x, y);
+  else { g.fillStyle = `rgb(${clamp(r + n)},${clamp(gg + n)},${clamp(b + n)})`; g.fillRect(px, py, TILE, TILE); }
 
   switch (t) {
     case "grass":
