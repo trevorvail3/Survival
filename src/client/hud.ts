@@ -12,7 +12,7 @@ import type { Content, InvSlot, ItemDef, ItemId, SettlerRole, StructureId, World
 import { SETTLER_ROLES } from "../core/types.ts";
 import { glyph } from "./glyph.ts";
 import { itemIconSVG } from "./itemIcon.ts";
-import { canBuild, canCraft, canSpendSkill, capacity, idleSettlers, INV_COLS, isNight } from "../core/world.ts";
+import { canBuild, canCraft, canSpendSkill, capacity, dismantleYield, idleSettlers, INV_COLS, isNight } from "../core/world.ts";
 import { SKILLS, TREE_NAMES, pointsInTree, xpForNext, nodeUnlocked, type SkillTree } from "../content/skills.ts";
 import { SKILL_META, SKILL_GROUPS, SKILL_IDS, MAX_SKILL, levelForXp, levelProgress, type SkillId } from "../content/trainskills.ts";
 import { RARITY_META, rarityOf, slotPower, characterPower, weaponDamage, armorSoak } from "../content/gear.ts";
@@ -67,6 +67,9 @@ export class Hud {
   private tracker: HTMLElement;
   private tipEl: HTMLElement;
   private banner: HTMLElement;
+  private backdrop: HTMLElement;
+  private inspectEl: HTMLElement;
+  private inspectTimer = 0;
   private audioBtn: HTMLButtonElement;
   private mode: "none" | "pack" | "settle" | "travel" | "skills" | "stash" = "none";
   private near: NearStations = { forge: false, workshop: false };
@@ -81,15 +84,35 @@ export class Hud {
     this.logEl = this.panel({ left: "12px", bottom: "12px", maxWidth: "340px", fontSize: "12px", color: "var(--ink-dim)" });
     this.hotbar = this.floating({ left: "50%", bottom: "12px", transform: "translateX(-50%)", display: "flex", gap: "6px" });
     this.promptEl = this.floating({ left: "50%", bottom: "76px", transform: "translateX(-50%)", pointerEvents: "none", fontFamily: "'Cinzel',serif", fontSize: "13px", letterSpacing: "0.08em", color: "var(--amber)", textShadow: "0 1px 6px #000", whiteSpace: "nowrap" });
-    this.pack = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(560px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none" });
-    this.settle = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(520px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none" });
-    this.travel = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(520px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none" });
-    this.skillsP = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(780px,96vw)", maxHeight: "90vh", overflow: "auto", display: "none" });
-    this.stashP = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(680px,94vw)", maxHeight: "88vh", overflow: "auto", display: "none" });
+    const modalZ = { zIndex: "50" };
+    this.pack = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(560px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none", ...modalZ });
+    this.settle = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(520px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none", ...modalZ });
+    this.travel = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(520px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none", ...modalZ });
+    this.skillsP = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(780px,96vw)", maxHeight: "90vh", overflow: "auto", display: "none", ...modalZ });
+    this.stashP = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(680px,94vw)", maxHeight: "88vh", overflow: "auto", display: "none", ...modalZ });
 
     this.bossBar = this.floating({ left: "50%", top: "64px", transform: "translateX(-50%)", width: "min(440px,72vw)", display: "none", textAlign: "center" });
     this.tracker = this.panel({ left: "12px", top: "172px", maxWidth: "230px", display: "none" });
     this.tipEl = this.floating({ left: "50%", top: "112px", transform: "translateX(-50%)", width: "min(460px,86vw)", textAlign: "center", opacity: "0", transition: "opacity 0.5s ease", pointerEvents: "none" });
+
+    // Dim backdrop behind modal panels — clicking/tapping it closes the panel,
+    // so you can always dismiss (even if a tall panel has scrolled its ✕ away).
+    this.backdrop = document.createElement("div");
+    Object.assign(this.backdrop.style, {
+      position: "fixed", inset: "0", background: "rgba(0,0,0,0.45)",
+      zIndex: "40", display: "none", pointerEvents: "auto",
+    } as Partial<CSSStyleDeclaration>);
+    this.backdrop.onclick = () => this.closeAll();
+    root.appendChild(this.backdrop);
+
+    // Inspect tooltip — hover (desktop) or long-press (touch) an item to read it.
+    this.inspectEl = document.createElement("div");
+    this.inspectEl.className = "hud-panel";
+    Object.assign(this.inspectEl.style, {
+      position: "fixed", zIndex: "60", maxWidth: "230px", display: "none",
+      pointerEvents: "none", fontSize: "12px", lineHeight: "1.5",
+    } as Partial<CSSStyleDeclaration>);
+    root.appendChild(this.inspectEl);
 
     this.banner = document.createElement("div");
     this.banner.className = "hud-banner";
@@ -176,6 +199,7 @@ export class Hud {
     this.travel.style.display = this.mode === "travel" ? "block" : "none";
     this.skillsP.style.display = this.mode === "skills" ? "block" : "none";
     this.stashP.style.display = this.mode === "stash" ? "block" : "none";
+    this.backdrop.style.display = this.mode === "none" ? "none" : "block";
   }
   togglePack(): void { this.mode = this.mode === "pack" ? "none" : "pack"; this.show(); }
   toggleSkills(): void { this.mode = this.mode === "skills" ? "none" : "skills"; this.show(); }
@@ -188,9 +212,70 @@ export class Hud {
   /** Append a tap-target close control to a modal panel (touch has no [Esc]).
    *  Uses insertAdjacentHTML so it never disturbs handlers already wired on the
    *  panel's existing contents. */
+  /** Rich inspect card for an inventory slot — name, rarity/Power, stats, text. */
+  private inspectHTML(s: InvSlot): string {
+    const def = this.content.items[s.id];
+    if (!def) return "";
+    const gear = !!(def.weapon || def.slot === "body");
+    const stat: string[] = [];
+    let head: string;
+    if (gear) {
+      const rm = RARITY_META[rarityOf(s)];
+      head = `<span style="color:${rm.color};font-family:'Cinzel',serif">${rm.name} ${def.name}</span>`;
+      stat.push(`<span style="color:var(--amber)">◈ Power ${slotPower(s)}</span>`);
+      stat.push(def.weapon ? `Damage ${weaponDamage(def, s)}` : `Armour ${armorSoak(def, s)}`);
+      const y = dismantleYield(this.content, s, false);
+      stat.push(`<span style="color:var(--ink-dim)">Salvage → ${y.qty} ${this.content.items[y.id]?.name ?? y.id} (2× at base)</span>`);
+    } else {
+      head = `<span style="font-family:'Cinzel',serif">${def.name}</span>`;
+      if (def.heal) stat.push(`Heals ${def.heal}`);
+      if (def.food) stat.push(`Food +${def.food}`);
+      if (def.drink) stat.push(`Water +${def.drink}`);
+      if (def.cure) stat.push(`Cures ${def.cure} rot`);
+      if (def.throwDamage) stat.push(`Throw ${def.throwDamage} dmg`);
+    }
+    return `<div style="color:var(--ink);margin-bottom:3px">${head}</div>` +
+      (stat.length ? `<div style="color:var(--ink);margin-bottom:4px">${stat.join(" · ")}</div>` : "") +
+      `<div style="color:var(--ink-dim);font-style:italic">${def.desc}</div>`;
+  }
+
+  private showInspect(s: InvSlot, x: number, y: number): void {
+    const html = this.inspectHTML(s);
+    if (!html) return;
+    this.inspectEl.innerHTML = html;
+    this.inspectEl.style.display = "block";
+    // Clamp to the viewport (offset from the cursor/finger).
+    const w = 230, gx = Math.min(x + 14, window.innerWidth - w - 8);
+    const gy = Math.min(y + 14, window.innerHeight - this.inspectEl.offsetHeight - 8);
+    this.inspectEl.style.left = `${Math.max(8, gx)}px`;
+    this.inspectEl.style.top = `${Math.max(8, gy)}px`;
+  }
+  private hideInspect(): void { this.inspectEl.style.display = "none"; }
+
+  /** Wire hover (desktop) + long-press (touch) inspect onto a slot element.
+   *  Returns whether a long-press just fired, so the click handler can skip. */
+  private attachInspect(el: HTMLElement, get: () => InvSlot | null): void {
+    el.addEventListener("mouseenter", (e) => { const s = get(); if (s) this.showInspect(s, e.clientX, e.clientY); });
+    el.addEventListener("mousemove", (e) => { if (this.inspectEl.style.display !== "none") { const s = get(); if (s) this.showInspect(s, e.clientX, e.clientY); } });
+    el.addEventListener("mouseleave", () => this.hideInspect());
+    el.addEventListener("touchstart", (e) => {
+      const t = e.touches[0]; if (!t) return;
+      if (this.inspectTimer) clearTimeout(this.inspectTimer);
+      this.inspectTimer = window.setTimeout(() => {
+        const s = get(); if (s) { this.showInspect(s, t.clientX, t.clientY); el.dataset["longpress"] = "1"; window.setTimeout(() => this.hideInspect(), 2600); }
+      }, 400);
+    }, { passive: true });
+    const cancel = () => { if (this.inspectTimer) { clearTimeout(this.inspectTimer); this.inspectTimer = 0; } };
+    el.addEventListener("touchend", cancel);
+    el.addEventListener("touchmove", cancel);
+    el.addEventListener("touchcancel", cancel);
+  }
+
   private addClose(panel: HTMLElement): void {
-    panel.insertAdjacentHTML("beforeend",
-      `<button class="act closeX" aria-label="close" style="position:absolute;top:8px;right:8px;width:34px;height:34px;padding:0;border-radius:50%;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center">✕</button>`);
+    // sticky so it stays pinned to the panel's top-right even when the panel
+    // scrolls (the stash/bank is taller than the screen).
+    panel.insertAdjacentHTML("afterbegin",
+      `<button class="act closeX" aria-label="close" style="position:sticky;float:right;top:0;margin:-2px -2px 0 8px;width:34px;height:34px;padding:0;border-radius:50%;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;z-index:2">✕</button>`);
     const x = panel.querySelector<HTMLButtonElement>(".closeX");
     if (x) x.onclick = () => this.closeAll();
   }
@@ -266,7 +351,8 @@ export class Hud {
     }).join("");
     this.hotbar.querySelectorAll<HTMLElement>("[data-hotbar]").forEach((el) => {
       const id = el.dataset["hotbar"] as ItemId;
-      if (count(world, id) > 0) el.onclick = () => this.handlers.onHotbar(id);
+      this.attachInspect(el, () => (count(world, id) > 0 ? { id, qty: count(world, id) } : { id, qty: 0 }));
+      if (count(world, id) > 0) el.onclick = () => { if (el.dataset["longpress"]) { delete el.dataset["longpress"]; return; } this.handlers.onHotbar(id); };
     });
 
     this.logEl.innerHTML = `<div class="hud-heading">Log</div>` + (this.log.length ? this.log.map((m) => `<div>${m}</div>`).join("") : `<div style="opacity:.5">…</div>`);
@@ -314,8 +400,16 @@ export class Hud {
         <div class="grid sk">${stash}</div>
         <div style="text-align:center;margin-top:8px;font-size:12px;color:var(--ink-dim)">Bank your gains here before a dangerous run. [Esc] close</div>
       </div>`;
-    this.stashP.querySelectorAll<HTMLElement>(".slot[data-store]").forEach((el) => { el.onclick = () => this.handlers.onStore(Number(el.dataset["store"])); });
-    this.stashP.querySelectorAll<HTMLElement>(".slot[data-take]").forEach((el) => { el.onclick = () => this.handlers.onTake(Number(el.dataset["take"])); });
+    this.stashP.querySelectorAll<HTMLElement>(".slot[data-store]").forEach((el) => {
+      const i = Number(el.dataset["store"]);
+      this.attachInspect(el, () => world.player.inv[i] ?? null);
+      el.onclick = () => { if (el.dataset["longpress"]) { delete el.dataset["longpress"]; return; } this.handlers.onStore(i); };
+    });
+    this.stashP.querySelectorAll<HTMLElement>(".slot[data-take]").forEach((el) => {
+      const i = Number(el.dataset["take"]);
+      this.attachInspect(el, () => world.stash[i] ?? null);
+      el.onclick = () => { if (el.dataset["longpress"]) { delete el.dataset["longpress"]; return; } this.handlers.onTake(i); };
+    });
     this.addClose(this.stashP);
   }
 
@@ -519,7 +613,9 @@ export class Hud {
       <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--ink-dim)">[Tab] close · click gear to equip, ⊟ to salvage (more at base) · click an item to use</div>`;
 
     this.pack.querySelectorAll<HTMLElement>(".slot[data-slot]").forEach((el) => {
-      el.onclick = () => this.handlers.onUseSlot(Number(el.dataset["slot"])); // useSlot equips gear, uses consumables
+      const i = Number(el.dataset["slot"]);
+      this.attachInspect(el, () => world.player.inv[i] ?? null);
+      el.onclick = () => { if (el.dataset["longpress"]) { delete el.dataset["longpress"]; return; } this.handlers.onUseSlot(i); }; // useSlot equips gear, uses consumables
     });
     this.pack.querySelectorAll<HTMLElement>(".salv[data-salv]").forEach((el) => {
       el.onclick = (ev) => { ev.stopPropagation(); this.handlers.onDismantle(Number(el.dataset["salv"])); };
