@@ -51,6 +51,12 @@ export function loadGame(): { seed: number; world: World } | null {
     if (!("offhand" in pl)) pl["offhand"] = null;
     // Gathering-activity state added later.
     if (!("gathering" in pl)) pl["gathering"] = null;
+    // Tool belt added later — stock it with the basics so older saves can still
+    // gather (tools used to live in the pack; those copies are harmless).
+    const tools = pl["tools"] as unknown;
+    if (!tools || typeof tools !== "object") {
+      pl["tools"] = { woodcutting: { id: "felling_axe", qty: 1 }, mining: { id: "pickaxe", qty: 1 }, fishing: { id: "fishing_rod", qty: 1 } };
+    }
     const w = blob.world as unknown as Record<string, unknown>;
     if (typeof w["won"] !== "boolean") w["won"] = false;
     if (!Array.isArray(w["stash"])) w["stash"] = new Array(48).fill(null);

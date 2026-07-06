@@ -249,6 +249,10 @@ export interface Player {
   equipped: InvSlot | null; // equipped weapon instance (rolled Power/rarity)
   /** Equipped off-hand (a shield). Locked out while a two-handed weapon is wielded. */
   offhand: InvSlot | null;
+  /** The tool belt — gathering tools live here, not in the pack, so they're
+   *  always to hand. Keyed by the gathering skill ("woodcutting" | "mining" |
+   *  "fishing"). A node of that skill can't be worked without its tool. */
+  tools: Record<string, InvSlot | null>;
   /** Equipped armour, one instance per slot (head/body/hands/legs/feet). */
   armor: Record<ArmorSlot, InvSlot | null>;
   nextAttack: number;
