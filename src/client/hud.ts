@@ -33,14 +33,11 @@ export interface HudHandlers {
   onHotbar: (itemId: ItemId) => void;
   onTogglePack: () => void;
   onToggleSkills: () => void;
+  onToggleSettlement: () => void;
+  onToggleTravel: () => void;
+  onToggleStash: () => void;
   onDismantle: (slotIndex: number) => void;
 }
-
-/** True on touch-primary devices (phones/tablets), where we surface on-screen
- *  buttons for the actions that are otherwise keyboard/right-click only. */
-const TOUCH: boolean =
-  (typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches) ||
-  (typeof window !== "undefined" && "ontouchstart" in window);
 
 const ROLE_INFO: Record<SettlerRole, { name: string; glyph: string; effect: string }> = {
   gatherer: { name: "Gatherer", glyph: "anvil", effect: "Timber, stone & ore each dawn" },
@@ -80,6 +77,9 @@ export class Hud {
   private dirty = true;
   /** Last rendered hotbar signature (item:qty,...), to skip no-op rebuilds. */
   private hotbarSig = "";
+  /** Tab-bar buttons keyed by the mode they open, for active-tab highlighting. */
+  private tabButtons: Partial<Record<"pack" | "settle" | "travel" | "skills" | "stash", HTMLButtonElement>> = {};
+  private dodgeBtn: HTMLButtonElement | null = null;
 
   constructor(private root: HTMLElement, private content: Content, private handlers: HudHandlers) {
     root.innerHTML = "";
@@ -131,29 +131,67 @@ export class Hud {
     this.audioBtn.onclick = () => { audio.setMuted(!audio.getMuted()); this.audioBtn.innerHTML = ico(audio.getMuted() ? "mute" : "sound"); };
     root.appendChild(this.audioBtn);
 
-    if (TOUCH) this.buildTouchControls();
+    this.buildTabBar();
   }
 
-  /** On touch devices, surface the actions that are otherwise keyboard/right-
-   *  click only: dodge, and the Pack / Skills panels. (Settlement, travel and
-   *  stash open by tapping their props in the world.) */
-  private buildTouchControls(): void {
-    const mk = (label: string, size: number, bottom: number, font: number, onTap: () => void): void => {
+  /** The permanent, always-visible OSRS-style tab strip — every panel (and
+   *  dodge) opens by clicking here. There is no keyboard control surface and
+   *  no device-specific gating: the same buttons serve mouse and touch. */
+  private buildTabBar(): void {
+    const TABS: { mode: "pack" | "settle" | "travel" | "skills" | "stash"; glyphName: string; label: string; onTap: () => void }[] = [
+      { mode: "pack", glyphName: "backpack", label: "Pack", onTap: () => this.handlers.onTogglePack() },
+      { mode: "skills", glyphName: "sword", label: "Skills", onTap: () => this.handlers.onToggleSkills() },
+      { mode: "settle", glyphName: "home", label: "Settlement", onTap: () => this.handlers.onToggleSettlement() },
+      { mode: "travel", glyphName: "map", label: "Expedition", onTap: () => this.handlers.onToggleTravel() },
+      { mode: "stash", glyphName: "box", label: "Stash", onTap: () => this.handlers.onToggleStash() },
+    ];
+    const bar = document.createElement("div");
+    Object.assign(bar.style, {
+      position: "absolute", right: "12px", top: "156px", zIndex: "10",
+      display: "flex", flexDirection: "column", gap: "6px",
+    } as Partial<CSSStyleDeclaration>);
+    for (const t of TABS) {
       const b = document.createElement("button");
-      b.className = "act";
-      b.innerHTML = label;
+      b.className = "act tabBtn";
+      b.title = t.label;
+      b.setAttribute("aria-label", t.label);
       Object.assign(b.style, {
-        position: "absolute", right: "16px", bottom: `${bottom}px`,
-        width: `${size}px`, height: `${size}px`, padding: "0", borderRadius: "50%",
-        fontSize: `${font}px`, lineHeight: "1", display: "flex",
-        alignItems: "center", justifyContent: "center", touchAction: "manipulation",
+        width: "44px", height: "44px", padding: "9px", borderRadius: "6px",
       } as Partial<CSSStyleDeclaration>);
-      b.onclick = onTap;
-      this.root.appendChild(b);
-    };
-    mk("↺", 68, 92, 26, () => this.handlers.onDodge());       // dodge / roll (primary)
-    mk("▤", 48, 172, 20, () => this.handlers.onTogglePack());  // pack
-    mk("✦", 48, 226, 20, () => this.handlers.onToggleSkills()); // skills
+      b.innerHTML = `<span style="width:100%;height:100%;display:block">${glyph(t.glyphName)}</span>`;
+      b.onclick = t.onTap;
+      bar.appendChild(b);
+      this.tabButtons[t.mode] = b;
+    }
+    this.root.appendChild(bar);
+
+    // Dodge is a combat action, not a menu tab — kept visually distinct
+    // (large, round, amber) and separate from the tab strip above.
+    const dodgeBtn = document.createElement("button");
+    dodgeBtn.className = "act";
+    dodgeBtn.title = "Dodge";
+    dodgeBtn.setAttribute("aria-label", "Dodge");
+    Object.assign(dodgeBtn.style, {
+      position: "absolute", right: "16px", bottom: "92px", zIndex: "10",
+      width: "62px", height: "62px", padding: "0", borderRadius: "50%",
+      fontSize: "26px", lineHeight: "1", display: "flex",
+      alignItems: "center", justifyContent: "center",
+      borderColor: "var(--amber)", color: "var(--amber)",
+    } as Partial<CSSStyleDeclaration>);
+    dodgeBtn.innerHTML = "↺";
+    dodgeBtn.onclick = () => this.handlers.onDodge();
+    this.root.appendChild(dodgeBtn);
+    this.dodgeBtn = dodgeBtn;
+  }
+
+  /** Amber-highlight whichever tab's panel is currently open; hide dodge while
+   *  a panel covers the screen (there's nothing sensible to dodge at). */
+  private updateTabHighlight(): void {
+    if (this.dodgeBtn) this.dodgeBtn.style.display = this.isModalOpen ? "none" : "flex";
+    for (const [m, btn] of Object.entries(this.tabButtons)) {
+      btn.style.borderColor = m === this.mode ? "var(--amber)" : "";
+      btn.style.color = m === this.mode ? "var(--amber)" : "";
+    }
   }
 
   private panel(style: Partial<CSSStyleDeclaration>): HTMLElement {
@@ -205,9 +243,13 @@ export class Hud {
     this.stashP.style.display = this.mode === "stash" ? "block" : "none";
     this.backdrop.style.display = this.mode === "none" ? "none" : "block";
     this.dirty = true;
+    this.updateTabHighlight();
   }
   togglePack(): void { this.mode = this.mode === "pack" ? "none" : "pack"; this.show(); }
   toggleSkills(): void { this.mode = this.mode === "skills" ? "none" : "skills"; this.show(); }
+  toggleSettlement(): void { this.mode = this.mode === "settle" ? "none" : "settle"; this.show(); }
+  toggleTravel(): void { this.mode = this.mode === "travel" ? "none" : "travel"; this.show(); }
+  toggleStash(): void { this.mode = this.mode === "stash" ? "none" : "stash"; this.show(); }
   openPack(): void { this.mode = "pack"; this.show(); }
   openSettlement(): void { this.mode = "settle"; this.show(); }
   openTravel(): void { this.mode = "travel"; this.show(); }
@@ -224,9 +266,6 @@ export class Hud {
    *  element mousedown started on. */
   markDirty(): void { this.dirty = true; }
 
-  /** Append a tap-target close control to a modal panel (touch has no [Esc]).
-   *  Uses insertAdjacentHTML so it never disturbs handlers already wired on the
-   *  panel's existing contents. */
   /** Rich inspect card for an inventory slot — name, rarity/Power, stats, text. */
   private inspectHTML(s: InvSlot): string {
     const def = this.content.items[s.id];
@@ -422,7 +461,7 @@ export class Hud {
         <div class="grid pk">${pack}</div>
         <div class="hud-heading">Storage <span style="color:var(--ink-dim);text-transform:none;letter-spacing:0">— click to take ◂ · safe if you fall</span></div>
         <div class="grid sk">${stash}</div>
-        <div style="text-align:center;margin-top:8px;font-size:12px;color:var(--ink-dim)">Bank your gains here before a dangerous run. [Esc] close</div>
+        <div style="text-align:center;margin-top:8px;font-size:12px;color:var(--ink-dim)">Bank your gains here before a dangerous run.</div>
       </div>`;
     this.stashP.querySelectorAll<HTMLElement>(".slot[data-store]").forEach((el) => {
       const i = Number(el.dataset["store"]);
@@ -511,7 +550,7 @@ export class Hud {
       this.trainedGrid(world) +
       `<div class="hud-heading" style="margin-top:14px">Perks — spend points earned by levelling up</div>` +
       `<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">${treeSvg("warfare")}${treeSvg("endurance")}${treeSvg("dominion")}</div>` +
-      `<div style="text-align:center;margin-top:8px;font-size:12px;color:var(--ink-dim)">Skills grow as you use them. Perks unlock along the lines — hover for detail. [C] or [Esc] close</div>`;
+      `<div style="text-align:center;margin-top:8px;font-size:12px;color:var(--ink-dim)">Skills grow as you use them. Perks unlock along the lines — hover for detail.</div>`;
 
     this.skillsP.querySelectorAll<SVGGElement>("g[data-skill]").forEach((el) => {
       el.onclick = () => this.handlers.onSpendSkill(el.dataset["skill"]!);
@@ -566,7 +605,7 @@ export class Hud {
     this.travel.innerHTML =
       `<div class="hud-heading" style="text-align:center">The Hold — ${atHome ? "choose an expedition" : "return, or press on"}</div>` +
       `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;background:radial-gradient(circle at 50% 45%, #2a2418, #1a160e);border:1px solid #4a3d2c;border-radius:4px" xmlns="http://www.w3.org/2000/svg">${roads}${home}${pins}</svg>` +
-      `<div style="text-align:center;margin-top:8px;font-size:12px;color:var(--ink-dim)">Time passes on the road — be home before the light fails. [Esc] close</div>`;
+      `<div style="text-align:center;margin-top:8px;font-size:12px;color:var(--ink-dim)">Time passes on the road — be home before the light fails.</div>`;
 
     this.travel.querySelectorAll<SVGGElement>("g[data-travel]").forEach((el) => {
       el.onclick = () => this.handlers.onTravel(el.dataset["travel"]!);
@@ -634,7 +673,7 @@ export class Hud {
       <div class="hud-heading">The Pack</div>
       <div id="hud-pack-grid">${slots}</div>
       <div class="hud-heading">Craft</div>${recipes}
-      <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--ink-dim)">[Tab] close · click gear to equip, ⊟ to salvage (more at base) · click an item to use</div>`;
+      <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--ink-dim)">Click gear to equip, ⊟ to salvage (more at base) · click an item to use</div>`;
 
     this.pack.querySelectorAll<HTMLElement>(".slot[data-slot]").forEach((el) => {
       const i = Number(el.dataset["slot"]);
@@ -693,8 +732,7 @@ export class Hud {
       <div class="hud-heading">Structures</div>
       ${rows}
       <div class="hud-heading" style="margin-top:12px">Your People — ${idle} idle of ${world.settlement.population}/${cap}</div>
-      ${world.settlement.population > 0 ? roleRows : `<div style="font-size:12px;color:var(--ink-dim);padding:6px 4px">Rescue survivors in the wilds, then assign them here.</div>`}
-      <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--ink-dim)">[Esc] close</div>`;
+      ${world.settlement.population > 0 ? roleRows : `<div style="font-size:12px;color:var(--ink-dim);padding:6px 4px">Rescue survivors in the wilds, then assign them here.</div>`}`;
 
     this.settle.querySelectorAll<HTMLElement>("button[data-build]").forEach((el) => {
       if (!el.hasAttribute("disabled")) el.onclick = () => this.handlers.onBuild(el.dataset["build"] as StructureId);

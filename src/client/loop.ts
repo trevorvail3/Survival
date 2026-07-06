@@ -34,7 +34,7 @@ import { isNight } from "../core/world.ts";
 import { drawLighting, drawWorld, TILE, type Camera } from "./render.ts";
 import { Fx } from "./fx.ts";
 import { Input } from "./input.ts";
-import { Hud, HOTBAR } from "./hud.ts";
+import { Hud } from "./hud.ts";
 import { SKILL_META, type SkillId } from "../content/trainskills.ts";
 import { RARITY_META, type Rarity } from "../content/gear.ts";
 import { audio, type SceneKey } from "./audio.ts";
@@ -107,24 +107,11 @@ export class Game {
     const ctx = { now, rng: this.rng };
     this.events.length = 0;
 
-    // --- Input: clicks + hotkeys ---
-    if (this.input.pressed("tab")) { this.hud.togglePack(); audio.play("click"); this.tut("pack"); }
-    if (this.input.pressed("c")) { this.hud.toggleSkills(); audio.play("click"); }
-    if (this.input.pressed("escape")) this.hud.closeAll();
-
+    // --- Input: click only. Pack/Skills/Settlement/Travel/Stash open from the
+    // tab bar and dodge from its own button (see Hud.buildTabBar) — there is
+    // no keyboard control surface. ---
     const click = this.input.consumeClick();
     if (click && p.alive && !this.hud.isModalOpen) this.handleClick(click.x, click.y);
-
-    // Dodge: Space or right-click, rolling toward the cursor.
-    const wantDodge = this.input.consumeRight() || this.input.pressed(" ");
-    if (wantDodge && p.alive && !this.hud.isModalOpen) {
-      const aim = this.screenToWorld(this.input.mouseX, this.input.mouseY);
-      dodge(this.world, aim.x, aim.y, this.events);
-    }
-
-    for (let i = 0; i < HOTBAR.length; i++) {
-      if (this.input.pressed(String(i + 1))) this.useHotbar(HOTBAR[i]!, now);
-    }
 
     // --- Advance sim ---
     tick(world, this.content, ctx, dtMs, this.events);
@@ -290,6 +277,9 @@ export class Game {
       onHotbar: (id: ItemId) => { this.useHotbar(id, performance.now()); },
       onTogglePack: () => { this.hud.togglePack(); audio.play("click"); this.tut("pack"); },
       onToggleSkills: () => { this.hud.toggleSkills(); audio.play("click"); },
+      onToggleSettlement: () => { this.hud.toggleSettlement(); audio.play("click"); this.tut("board"); },
+      onToggleTravel: () => { this.hud.toggleTravel(); audio.play("click"); },
+      onToggleStash: () => { this.hud.toggleStash(); audio.play("click"); },
       onDismantle: (i: number) => { const ev: GameEvent[] = []; if (dismantle(this.world, this.content, i, ev)) this.dispatch(ev, performance.now()); },
       onTravel: (regionId: string) => {
         const fromHome = this.world.zoneId === "home";
@@ -346,7 +336,7 @@ export class Game {
         case "craft": audio.play("craft"); this.hud.pushLog(`Crafted ${this.content.items[e.id]?.name ?? e.id}.`); this.tut("craft"); break;
         case "build": audio.play("build"); this.hud.pushLog(`${this.content.structures[e.id].name} raised to level ${e.level}.`); this.hud.showBanner(this.content.structures[e.id].name, `Level ${e.level}`, 1500); break;
         case "recruit": audio.play("recruit"); this.tut("rescue"); break;
-        case "levelUp": audio.play("levelup"); this.hud.showBanner(`Level ${e.level}`, "A skill point earned — press C.", 2000); this.hud.pushLog(`You reach level ${e.level}.`); break;
+        case "levelUp": audio.play("levelup"); this.hud.showBanner(`Level ${e.level}`, "A skill point earned — open Skills to spend it.", 2000); this.hud.pushLog(`You reach level ${e.level}.`); break;
         case "skillup": { const m = SKILL_META[e.skill as SkillId]; audio.play("click"); this.hud.tip(`<b>${m?.name ?? e.skill}</b> level ${e.level}`); this.hud.pushLog(`${m?.name ?? e.skill} advanced to ${e.level}.`); break; }
         case "drop": {
           const rm = RARITY_META[e.rarity as Rarity]; const nm = this.content.items[e.id]?.name ?? e.id;
