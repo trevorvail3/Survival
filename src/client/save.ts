@@ -15,9 +15,17 @@ import type { World } from "../core/types.ts";
 
 export const SAVE_SLOTS = 3;
 const SAVE_VERSION = 4;
-const slotKey = (slot: number) => `ashfall-save-${slot}`;
 const LEGACY_KEY = "ashfall-save";
 const ACCOUNT_KEY = "ashfall-account";
+
+// Slots are namespaced per account so each Ironvail login has its own three
+// Wardens; guest/offline play uses the un-prefixed keys (also the migration
+// target for older single-slot saves). setActiveAccount picks the namespace.
+let acctPrefix = "";
+export function setActiveAccount(id: string | null): void {
+  acctPrefix = id ? `${id}-` : "";
+}
+const slotKey = (slot: number) => `ashfall-save-${acctPrefix}${slot}`;
 
 interface SaveBlob {
   v: number;
