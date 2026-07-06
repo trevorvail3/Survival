@@ -289,6 +289,7 @@ export class Game {
       onToggleSettlement: () => { this.hud.toggleSettlement(); audio.play("click"); this.tut("board"); },
       onToggleTravel: () => { this.hud.toggleTravel(); audio.play("click"); },
       onToggleStash: () => { this.hud.toggleStash(); audio.play("click"); },
+      onToggleSettings: () => { this.hud.toggleSettings(); audio.play("click"); },
       onDismantle: (i: number) => { const ev: GameEvent[] = []; if (dismantle(this.world, this.content, i, ev)) this.dispatch(ev, performance.now()); },
       onTravel: (regionId: string) => { this.travel(regionId, false); },
       onDecrypt: (i: number) => { const ev: GameEvent[] = []; if (decryptCoffer(this.world, this.content, { rng: this.rng }, i, ev)) this.dispatch(ev, performance.now()); },

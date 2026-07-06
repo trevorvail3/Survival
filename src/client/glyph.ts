@@ -21,6 +21,7 @@ export const GLYPHS: Record<string, string> = {
   skull: solid(`<path d="M12 3 C6.5 3 4 7 4 11 C4 14 6 15 6 17 L6 19 A2 2 0 0 0 8 21 L16 21 A2 2 0 0 0 18 19 L18 17 C18 15 20 14 20 11 C20 7 17.5 3 12 3 Z M9 11 A2 2 0 1 1 9 11.01 M15 11 A2 2 0 1 1 15 11.01 M11 16 L11 19 M13 16 L13 19" fill-rule="evenodd"/>`),
   backpack: line(`<path d="M7 8 Q7 4 12 4 Q17 4 17 8 L17 20 Q17 21 16 21 L8 21 Q7 21 7 20 Z"/><path d="M9 8 H15 M10 12 H14 M12 12 V15"/>`),
   wrench: line(`<path d="M15 4 A4 4 0 1 0 20 9 L14 15 L9 20 A2 2 0 0 1 6 17 L11 12 Z"/>`),
+  gear: line(`<circle cx="12" cy="12" r="3.2"/><path d="M12 2.5 V5.5 M12 18.5 V21.5 M2.5 12 H5.5 M18.5 12 H21.5 M5.3 5.3 L7.4 7.4 M16.6 16.6 L18.7 18.7 M18.7 5.3 L16.6 7.4 M7.4 16.6 L5.3 18.7"/>`),
   crosshair: line(`<circle cx="12" cy="12" r="7"/><path d="M12 2 V6 M12 18 V22 M2 12 H6 M18 12 H22"/>`),
   moon: solid(`<path d="M20 14 A8 8 0 1 1 11 4 A6 6 0 0 0 20 14 Z"/>`),
   sun: line(`<circle cx="12" cy="12" r="4"/><path d="M12 2 V5 M12 19 V22 M2 12 H5 M19 12 H22 M4.9 4.9 L7 7 M17 17 L19.1 19.1 M19.1 4.9 L17 7 M7 17 L4.9 19.1"/>`),
