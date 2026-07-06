@@ -226,6 +226,12 @@ export function generateRegion(rng: () => number, def: RegionDef): Layout {
   scatterProp("herbs", def.herbCount, "herbs");
   scatterProp("remains", 5, "remains");
 
+  // Extraction points: the entrance waystone (above) is one way out; scatter a
+  // couple more through the interior so you're never far from a way to leave
+  // with your haul — but you still have to reach one on foot (no warp-home
+  // button). Slaying the region's boss opens a further one where it falls.
+  scatterProp("waystone", 2);
+
   // Water + fishing spots on the shore (Fishing). The mire already has water;
   // elsewhere carve a small pond so every region can be fished.
   if (def.id !== "mire") blob("water", 1, 2, 3, 0.85);

@@ -21,7 +21,7 @@ const STEPS: Step[] = [
   { signal: "search", task: "Click a chest or barrel to search it.", done: "Scavenge all you can — supplies are scarce." },
   { signal: "pack", task: "Open your Pack (the ▤ tab) to craft or equip.", done: "Craft poultices and arms from what you gather." },
   { signal: "board", task: "Click the town board to manage your settlement.", done: "Raise walls and forge here; assign the folk you save." },
-  { signal: "travel", task: "Click the waystone to set out on an expedition.", done: "Range out by day — be behind your walls before dark." },
+  { signal: "travel", task: "Open the Expedition tab (⚑) — or use the war map — and set out.", done: "To come home, reach a waystone in the field. There's no warp back." },
   { signal: "rescue", task: "Out in the wilds, find and rescue a survivor.", done: "Bring them home. Your settlement grows. Good luck." },
 ];
 

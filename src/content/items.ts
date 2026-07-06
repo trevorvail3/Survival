@@ -37,6 +37,13 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   // --- Ammunition ---
   arrow: def({ id: "arrow", name: "Arrows", shape: "arrow", material: "wood", stack: 80, use: "none", desc: "Fletched shafts. Never enough in the quiver." }),
 
+  // --- Sealed Coffer (the raid payoff) ---
+  // A warden's warded strongbox. It carries a guaranteed rarity floor and a
+  // power band on its instance (InvSlot.rarity / .power); its true contents are
+  // only rolled when you break its seal back at the settlement. Carry it home —
+  // fall in the wilds and it's lost with the rest of your pack.
+  coffer: def({ id: "coffer", name: "Sealed Coffer", shape: "coffer", material: "iron", stack: 1, use: "none", desc: "A warden's warded strongbox, still sealed. Break it open at your settlement to see what fortune it holds." }),
+
   // --- Weapons ---
   fists: def({ id: "fists", name: "Bare Hands", shape: "fist", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "fist", damage: 6, reach: 1.0, cooldown: 900 }, desc: "Better than nothing. Barely." }),
   club: def({ id: "club", name: "Wooden Club", shape: "club", material: "wood", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "blunt", damage: 14, reach: 1.2, cooldown: 1100 }, desc: "A knot of oak. Cracks skulls, old or risen." }),

@@ -97,6 +97,16 @@ function draw(shape: string, p: Pal, id: string): string {
       return `<path d="M8,8 L13,6 Q16,9 19,6 L24,8 L23,22 Q16,27 9,22 Z" fill="${p.base}" stroke="${p.edge}" stroke-width="1.2" stroke-linejoin="round"/><path d="M16,9 V24" stroke="${p.dark}" stroke-width="1" opacity="0.6"/><path d="M10,12 Q16,14 22,12" stroke="${p.light}" stroke-width="1" fill="none" opacity="0.5"/><path d="M10,16 Q16,18 22,16" stroke="${p.light}" stroke-width="1" fill="none" opacity="0.4"/>`;
     case "fish":
       return `<g transform="rotate(-12 16 16)"><path d="M6,16 Q13,9 22,16 Q13,23 6,16 Z" fill="${p.base}" stroke="${p.edge}" stroke-width="1.1"/><path d="M22,16 L27,12 L26,16 L27,20 Z" fill="${p.base}" stroke="${p.edge}" stroke-width="1"/><circle cx="11" cy="15" r="1.2" fill="${p.dark}"/><path d="M14,13 Q16,16 14,19" stroke="${p.light}" stroke-width="0.8" fill="none" opacity="0.6"/></g>`;
+    case "coffer": {
+      // A domed, iron-banded strongbox with a gilded ward-lock — still sealed.
+      const gold = "#d8a53a";
+      return `<path d="M5,15 Q5,9 16,9 Q27,9 27,15 L27,15 L5,15 Z" fill="${p.light}" stroke="${p.edge}" stroke-width="1.1"/>` +
+        `<rect x="5" y="15" width="22" height="11" rx="1.5" fill="${p.base}" stroke="${p.edge}" stroke-width="1.2"/>` +
+        `<rect x="4.5" y="14" width="23" height="3" fill="${p.dark}"/>` +
+        `<rect x="11" y="9" width="3" height="17" fill="${gold}" opacity="0.85"/><rect x="18" y="9" width="3" height="17" fill="${gold}" opacity="0.85"/>` +
+        `<rect x="13.5" y="16" width="5" height="6" rx="1" fill="${gold}"/><circle cx="16" cy="19" r="1.2" fill="${p.edge}"/>` +
+        `<path d="M9,13 Q16,15 23,13" stroke="${p.light}" stroke-width="0.8" fill="none" opacity="0.5"/>`;
+    }
     default:
       return `<circle cx="16" cy="16" r="9" fill="${p.base}" stroke="${p.edge}" stroke-width="1.4"/><circle cx="13" cy="13" r="3" fill="${p.light}" opacity="0.6"/>`;
   }

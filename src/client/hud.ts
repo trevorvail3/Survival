@@ -38,6 +38,7 @@ export interface HudHandlers {
   onToggleTravel: () => void;
   onToggleStash: () => void;
   onDismantle: (slotIndex: number) => void;
+  onDecrypt: (slotIndex: number) => void;
 }
 
 const ROLE_INFO: Record<SettlerRole, { name: string; glyph: string; effect: string }> = {
@@ -599,6 +600,10 @@ export class Hud {
     const W = 460, H = 340; // parchment map
     const hx = W / 2, hy = H / 2;
     const skulls = (n: number) => Array.from({ length: n }, () => "◆").join("");
+    // You choose an expedition from HOME. Out in the field the map is a
+    // reference only — there is no warp-home button; you leave by reaching a
+    // waystone (an extraction point) on foot.
+    const atHome = world.zoneId === "home";
 
     // Roads from the settlement out to each region.
     const roads = this.content.regions.map((r) => {
@@ -622,7 +627,8 @@ export class Hud {
       const powCol = myPow >= r.power ? "#7f9a3c" : myPow >= r.power - 8 ? "#c8922e" : "#c23b2c";
       const powTag = locked || cleansed ? "" : ` <tspan fill="${powCol}">◈${r.power}</tspan>`;
       const sub = locked ? `<tspan fill="#7a6b4a">sealed</tspan>` : cleansed ? `<tspan fill="#e6b24e">cleansed</tspan>` : `<tspan fill="${dcol}">${skulls(r.danger)}</tspan>${powTag}${here ? " · here" : ""}`;
-      return `<g data-travel="${r.id}" style="cursor:pointer;opacity:${locked ? 0.7 : 1}">
+      const clickable = atHome && !locked;
+      return `<g ${clickable ? `data-travel="${r.id}"` : ""} style="cursor:${clickable ? "pointer" : "default"};opacity:${locked ? 0.7 : 1}">
         <title>${r.name} — ${locked ? "Slay both the Barrow King and the Pale Prior to unlock." : r.blurb}</title>
         <circle cx="${px}" cy="${py}" r="${here ? 11 : 9}" fill="${fill}" stroke="${stroke}" stroke-width="2.5"/>
         ${locked ? `<text x="${px}" y="${py + 4}" text-anchor="middle" font-size="11" fill="#c8922e">🔒</text>` : ""}
@@ -631,20 +637,23 @@ export class Hud {
       </g>`;
     }).join("");
 
-    const atHome = world.zoneId === "home";
-    const home = `<g data-travel="home" style="cursor:${atHome ? "default" : "pointer"}">
+    const home = `<g style="cursor:default">
       <title>Your Settlement — safe walls, hearth, forge and workshop</title>
       <rect x="${hx - 13}" y="${hy - 11}" width="26" height="22" rx="2" fill="${atHome ? "#c8922e" : "#3a2c1c"}" stroke="${atHome ? "#fff2cf" : "#c8922e"}" stroke-width="2.5"/>
       <path d="M${hx - 15} ${hy - 11} L${hx} ${hy - 20} L${hx + 15} ${hy - 11}" fill="none" stroke="${atHome ? "#fff2cf" : "#c8922e"}" stroke-width="2.5"/>
       <text x="${hx}" y="${hy + 34}" text-anchor="middle" font-size="12" font-family="Cinzel, serif" fill="#e6dcc4">Settlement${atHome ? " · here" : ""}</text>
     </g>`;
 
-    this.travel.innerHTML =
-      `<div class="hud-heading" style="text-align:center">The Hold — ${atHome ? "choose an expedition" : "return, or press on"}</div>` +
-      `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;background:radial-gradient(circle at 50% 45%, #2a2418, #1a160e);border:1px solid #4a3d2c;border-radius:4px" xmlns="http://www.w3.org/2000/svg">${roads}${home}${pins}</svg>` +
-      `<div style="text-align:center;margin-top:8px;font-size:12px;color:var(--ink-dim)">Time passes on the road — be home before the light fails.</div>`;
+    const footer = atHome
+      ? `Choose an expedition — click a region to set out. Time passes on the road.`
+      : `You're in the field. There's no warp home — reach a <span style="color:#78b4dc">waystone</span> (an extraction point) on foot to leave with your haul. Slaying the region's warden opens one where it falls.`;
 
-    this.travel.querySelectorAll<SVGGElement>("g[data-travel]").forEach((el) => {
+    this.travel.innerHTML =
+      `<div class="hud-heading" style="text-align:center">The Hold — ${atHome ? "choose an expedition" : "extraction"}</div>` +
+      `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block;background:radial-gradient(circle at 50% 45%, #2a2418, #1a160e);border:1px solid #4a3d2c;border-radius:4px" xmlns="http://www.w3.org/2000/svg">${roads}${home}${pins}</svg>` +
+      `<div style="text-align:center;margin-top:8px;font-size:12px;color:var(--ink-dim)">${footer}</div>`;
+
+    if (atHome) this.travel.querySelectorAll<SVGGElement>("g[data-travel]").forEach((el) => {
       el.onclick = () => this.handlers.onTravel(el.dataset["travel"]!);
     });
     this.addClose(this.travel);
@@ -652,15 +661,23 @@ export class Hud {
 
   private renderPack(world: World): void {
     const p = world.player;
+    const atHome = world.zoneId === "home";
     const slots = p.inv.map((s, i) => {
       if (!s) return `<div class="slot empty"></div>`;
       const def = this.content.items[s.id]!;
       const gear = !!(def.weapon || def.slot === "body");
-      const col = gear ? RARITY_META[rarityOf(s)].color : "#26282a";
-      const pw = gear ? `<span class="e" style="color:${col}">◈${slotPower(s)}</span>` : "";
-      const salv = gear ? `<button class="salv" data-salv="${i}" title="Salvage for parts (more at base)">⊟</button>` : "";
-      return `<div class="slot" data-slot="${i}" title="${gearTip(def, s)}" style="border-color:${col}">
-        <div class="ic">${itemIconSVG(def)}</div>${s.qty > 1 ? `<span class="q">${s.qty}</span>` : ""}${pw}${salv}
+      const coffer = s.id === "coffer";
+      // Coffers show their guaranteed rarity FLOOR (its border + "+" tag); gear
+      // shows its rolled rarity + Power.
+      const col = gear || coffer ? RARITY_META[rarityOf(s)].color : "#26282a";
+      const pw = gear ? `<span class="e" style="color:${col}">◈${slotPower(s)}</span>`
+        : coffer ? `<span class="e" style="color:${col}">${RARITY_META[rarityOf(s)].name[0]}+</span>` : "";
+      // Gear salvages (⊟); a coffer breaks its seal (only at the settlement).
+      const act = gear ? `<button class="salv" data-salv="${i}" title="Salvage for parts (more at base)">⊟</button>`
+        : coffer ? `<button class="salv seal" data-seal="${i}" title="${atHome ? "Break the seal — reveal what it holds" : "Carry it home to break the seal"}" ${atHome ? "" : "disabled"}>✦</button>` : "";
+      const tip = coffer ? `${RARITY_META[rarityOf(s)].name}+ Sealed Coffer — break it open at your settlement (◈${slotPower(s)} band)` : gearTip(def, s);
+      return `<div class="slot" data-slot="${i}" title="${tip}" style="border-color:${col}">
+        <div class="ic">${itemIconSVG(def)}</div>${s.qty > 1 ? `<span class="q">${s.qty}</span>` : ""}${pw}${act}
       </div>`;
     }).join("");
 
@@ -704,13 +721,16 @@ export class Hud {
         .slot .q{position:absolute;bottom:1px;right:3px;font-size:11px}.slot .e{position:absolute;top:1px;right:3px;font-size:11px;color:var(--amber)}
         .slot .salv{position:absolute;bottom:1px;left:1px;width:15px;height:15px;padding:0;font-size:11px;line-height:1;border:1px solid #3a3d40;border-radius:3px;background:#17191a;color:#9aa09b;cursor:pointer}
         .slot .salv:hover{border-color:var(--rust);color:#fff}
+        .slot .seal{color:var(--amber);border-color:#6a5326}
+        .slot .seal:hover:not([disabled]){border-color:var(--amber);color:#fff;box-shadow:0 0 6px rgba(200,146,46,.6)}
+        .slot .seal[disabled]{opacity:.4;cursor:default}
         .recipe{display:flex;align-items:center;gap:10px;padding:6px;border-bottom:1px solid #1c1e20}
       </style>
       ${loadout}
       <div class="hud-heading">The Pack</div>
       <div id="hud-pack-grid">${slots}</div>
       <div class="hud-heading">Craft</div>${recipes}
-      <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--ink-dim)">Click gear to equip, ⊟ to salvage (more at base) · click an item to use</div>`;
+      <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--ink-dim)">Click gear to equip, ⊟ to salvage · ✦ breaks a Sealed Coffer open (at home) · click an item to use</div>`;
 
     this.pack.querySelectorAll<HTMLElement>(".slot[data-slot]").forEach((el) => {
       const i = Number(el.dataset["slot"]);
@@ -719,6 +739,9 @@ export class Hud {
     });
     this.pack.querySelectorAll<HTMLElement>(".salv[data-salv]").forEach((el) => {
       el.onclick = (ev) => { ev.stopPropagation(); this.handlers.onDismantle(Number(el.dataset["salv"])); };
+    });
+    this.pack.querySelectorAll<HTMLElement>(".seal[data-seal]").forEach((el) => {
+      el.onclick = (ev) => { ev.stopPropagation(); if (!el.hasAttribute("disabled")) this.handlers.onDecrypt(Number(el.dataset["seal"])); };
     });
     this.pack.querySelectorAll<HTMLElement>(".recipe").forEach((el) => {
       const btn = el.querySelector("button");
