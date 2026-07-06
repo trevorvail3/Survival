@@ -18,9 +18,12 @@
 const SUPABASE_URL = "https://qkdjddlrgtaxxwlbkwbq.supabase.co";
 const SUPABASE_ANON = "sb_publishable_NUUtwbtlTCz9YQeDSMUQ8w_Ys2iGVAs";
 
+import type { SaveBlob } from "./save.ts";
+
 export interface Account { id: string; email: string; }
 
-// The UMD build (loaded in index.html) exposes `window.supabase`.
+// Minimal shape of the Supabase JS client (UMD build on window.supabase).
+interface CloudRow { slot: number; name: string; save_data: unknown }
 type SbClient = {
   auth: {
     getSession: () => Promise<{ data: { session: { user: { id: string; email?: string } } | null } }>;
@@ -28,9 +31,16 @@ type SbClient = {
     signUp: (c: { email: string; password: string }) => Promise<{ data: { user: { id: string; email?: string } | null; session: unknown }; error: { message: string } | null }>;
     signOut: () => Promise<unknown>;
   };
+  from: (table: string) => {
+    select: (cols: string) => { eq: (c: string, v: string) => { order: (c: string) => Promise<{ data: CloudRow[] | null; error: { message: string } | null }> } };
+    upsert: (row: Record<string, unknown>, opts?: { onConflict?: string }) => Promise<{ error: { message: string } | null }>;
+    delete: () => { eq: (c: string, v: string) => { eq: (c: string, v: number) => Promise<{ error: { message: string } | null }> } };
+  };
 };
 
+const TABLE = "ashfall_characters";
 let sb: SbClient | null = null;
+let uid: string | null = null; // the signed-in user's id (for cloud rows)
 
 /** Try to construct the Supabase client. Safe to call before the CDN script
  *  finishes — returns false if the library isn't there yet. */
@@ -44,8 +54,11 @@ export function initAccount(): boolean {
 
 export function available(): boolean { return !!sb; }
 
-const toAccount = (u: { id: string; email?: string } | null | undefined): Account | null =>
-  u ? { id: u.id, email: u.email || "" } : null;
+const toAccount = (u: { id: string; email?: string } | null | undefined): Account | null => {
+  if (!u) return null;
+  uid = u.id;
+  return { id: u.id, email: u.email || "" };
+};
 
 /** The already-signed-in account (persisted by Supabase), if any. */
 export async function currentAccount(): Promise<Account | null> {
@@ -77,6 +90,40 @@ export async function signUp(email: string, password: string): Promise<{ account
 }
 
 export async function signOut(): Promise<void> {
+  uid = null;
   if (!sb) return;
   try { await sb.auth.signOut(); } catch { /* ignore */ }
+}
+
+// --- Cloud character slots (Supabase `ashfall_characters`). All best-effort:
+// a null / false return means the cloud is unavailable (offline, not signed in,
+// or the table isn't provisioned yet) and the caller falls back to local. ---
+
+/** Per-slot save blobs from the cloud (index = slot). null = cloud unavailable. */
+export async function cloudList(): Promise<(unknown | null)[] | null> {
+  if (!sb || !uid) return null;
+  try {
+    const { data, error } = await sb.from(TABLE).select("slot, name, save_data").eq("user_id", uid).order("slot");
+    if (error) return null;
+    const out: (unknown | null)[] = [null, null, null];
+    (data || []).forEach((r) => { if (r.slot >= 0 && r.slot < 3) out[r.slot] = r.save_data; });
+    return out;
+  } catch { return null; }
+}
+
+export async function cloudSave(slot: number, blob: SaveBlob): Promise<boolean> {
+  if (!sb || !uid) return false;
+  try {
+    const { error } = await sb.from(TABLE).upsert(
+      { user_id: uid, slot, name: blob.name, save_data: blob, updated_at: new Date().toISOString() },
+      { onConflict: "user_id,slot" },
+    );
+    return !error;
+  } catch { return false; }
+}
+
+export async function cloudDelete(slot: number): Promise<boolean> {
+  if (!sb || !uid) return false;
+  try { const { error } = await sb.from(TABLE).delete().eq("user_id", uid).eq("slot", slot); return !error; }
+  catch { return false; }
 }
