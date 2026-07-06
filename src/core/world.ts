@@ -80,7 +80,7 @@ export type GameEvent =
   | { t: "recruit" }
   | { t: "levelUp"; level: number }
   | { t: "skillup"; skill: string; level: number }
-  | { t: "drop"; id: ItemId; rarity: string; power: number }
+  | { t: "drop"; id: ItemId; rarity: string; power: number; guaranteed: boolean }
   | { t: "salvage"; id: ItemId; qty: number }
   | { t: "victory" }
   | { t: "heal" }
@@ -365,6 +365,7 @@ export function createWorld(content: Content, rng: () => number): World {
     timeOfDay: 0.28,
     day: 1,
     clock: 0,
+    restReadyAt: 0,
     nextId: 1,
     log: [],
   };
@@ -414,9 +415,11 @@ export function travelTo(world: World, content: Content, rng: () => number, targ
     }
     const layout = generateRegion(rng, def);
     world.map = layout.map; world.props = layout.props; world.ground = [];
-    // A boss that has already been slain this run does not return.
-    const spawns = (layout.enemySpawns ?? []).filter((s) => !(s.boss && world.bossesSlain.includes(s.kind)));
-    world.enemies = buildEnemies(world, content, spawns);
+    // Bosses respawn on every fresh visit, same as the rest of the region —
+    // an expedition is a repeatable raid: run it again for another shot at
+    // its guaranteed drop. bossesSlain is a permanent record for unlocking
+    // other regions, not a one-time flag on the boss itself.
+    world.enemies = buildEnemies(world, content, layout.enemySpawns ?? []);
     world.entry = { ...layout.playerStart };
     out.push({ t: "log", msg: `You set out for ${def.name}.` });
   }
@@ -630,13 +633,22 @@ function damageEnemy(world: World, content: Content, ctx: { rng: () => number },
     out.push({ t: "kill", kind: e.kind, x: e.pos.x, y: e.pos.y });
     const table = e.boss ? `kill_${e.kind}` : e.kind === "revenant" ? "kill_revenant" : "kill_common";
     for (const d of rollLoot(ctx.rng, table)) spawnGround(world, d.id, d.qty, e.pos.x, e.pos.y);
-    // Destiny-style gear: bosses always drop, tougher foes sometimes.
-    const gearDrops = e.boss ? 2 : ctx.rng() < 0.105 + content.enemies[e.kind].bounty * 0.006 ? 1 : 0;
-    for (let i = 0; i < gearDrops; i++) spawnGearDrop(world, content, ctx, e.pos.x, e.pos.y, out);
     if (e.boss) {
+      // The raid payoff: every boss kill guarantees one drop at or above a
+      // rarity floor set by the region's danger — this, not per-kill RNG, is
+      // the main reason to run an expedition. A second, normally-rolled drop
+      // rides along for variety. Bosses respawn on every fresh visit (see
+      // travelTo), so this is a repeatable run-it-back loop, not a one-off.
+      const danger = regionById(world.zoneId)?.danger ?? 1;
+      const floor: Rarity = danger >= 4 ? "legendary" : danger >= 3 ? "epic" : danger >= 2 ? "rare" : "uncommon";
+      spawnGearDrop(world, content, ctx, e.pos.x, e.pos.y, out, floor);
+      spawnGearDrop(world, content, ctx, e.pos.x, e.pos.y, out);
       if (!world.bossesSlain.includes(e.kind)) world.bossesSlain.push(e.kind);
       out.push({ t: "log", msg: `${content.enemies[e.kind].name} falls. Its hoard is yours.` });
       if (e.kind === "rotmother" && !world.won) { world.won = true; out.push({ t: "victory" }); }
+    } else {
+      // Common foes: a small, level-scaled chance at a bonus drop.
+      if (ctx.rng() < 0.105 + content.enemies[e.kind].bounty * 0.006) spawnGearDrop(world, content, ctx, e.pos.x, e.pos.y, out);
     }
     grantXp(world, content.enemies[e.kind].bounty * 8 + 5, out);
   } else if (e.state === "idle" || e.state === "wander") {
@@ -659,17 +671,18 @@ function gearPool(content: Content): ItemId[] {
   return gearPoolCache;
 }
 
-/** Drop a rolled gear instance (rarity + Power) around the region's power band. */
-function spawnGearDrop(world: World, content: Content, ctx: { rng: () => number }, x: number, y: number, out: GameEvent[]): void {
+/** Drop a rolled gear instance (rarity + Power) around the region's power band.
+ *  `minRarity` guarantees at least that rarity (the boss raid-cache floor). */
+function spawnGearDrop(world: World, content: Content, ctx: { rng: () => number }, x: number, y: number, out: GameEvent[], minRarity?: Rarity): void {
   const pool = gearPool(content);
   if (pool.length === 0) return;
   const id = pick(ctx.rng, pool);
   const danger = world.zoneId === "home" ? 1 : regionById(world.zoneId)?.danger ?? 1;
-  const rarity: Rarity = rollRarity(ctx.rng, danger);
+  const rarity: Rarity = rollRarity(ctx.rng, danger, minRarity);
   const band = regionRecommendedPower(world) || 6;
   const power = rollPower(ctx.rng, band, rarity);
   world.ground.push({ id: world.nextId++, item: { id, qty: 1, power, rarity }, pos: { x: x + (world.nextId % 5) * 0.05 - 0.12, y: y + (world.nextId % 3) * 0.05 } });
-  out.push({ t: "drop", id, rarity, power });
+  out.push({ t: "drop", id, rarity, power, guaranteed: !!minRarity });
 }
 
 function attackPlayer(world: World, content: Content, e: Enemy, out: GameEvent[]): void {
@@ -788,11 +801,12 @@ const NODE_SKILL: Partial<Record<Prop["kind"], SkillId>> = {
 
 export function restAtHearth(world: World, content: Content, rng: () => number, out: GameEvent[]): void {
   const p = world.player;
-  // You bed down for the NIGHT — resting is what carries you to dawn. This is
-  // also what stops the hearth being spam-clicked for free heals + tribute:
-  // once you rest it is day again, and you cannot rest until the next night.
-  if (!isNight(world.timeOfDay)) {
-    out.push({ t: "log", msg: "No need to rest yet — the dead come by night." });
+  // Bedding down skips to the next dawn and pays out your settlers' tribute —
+  // available any time of day (day/night at home is atmosphere only, not a
+  // gameplay gate). Throttled by real elapsed playtime instead, so the hearth
+  // can't be spam-clicked for free heals + tribute.
+  if (world.clock < world.restReadyAt) {
+    out.push({ t: "log", msg: "You are not weary enough to rest again yet." });
     return;
   }
   p.hp = p.maxHp;
@@ -800,6 +814,7 @@ export function restAtHearth(world: World, content: Content, rng: () => number, 
   // Sleeping through to dawn: a day passes and your settlers bring their tribute.
   world.timeOfDay = 0.28;
   world.day++;
+  world.restReadyAt = world.clock + DAY_MS;
   deliverTribute(world, content, rng, out);
   out.push({ t: "dayBreak", day: world.day });
 }

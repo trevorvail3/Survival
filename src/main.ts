@@ -46,6 +46,9 @@ const handlers: HudHandlers = {
   onHotbar: (id) => gameHandlers?.onHotbar(id),
   onTogglePack: () => gameHandlers?.onTogglePack(),
   onToggleSkills: () => gameHandlers?.onToggleSkills(),
+  onToggleSettlement: () => gameHandlers?.onToggleSettlement(),
+  onToggleTravel: () => gameHandlers?.onToggleTravel(),
+  onToggleStash: () => gameHandlers?.onToggleStash(),
   onDismantle: (i) => gameHandlers?.onDismantle(i),
 };
 const hud = new Hud(hudRoot, content, handlers);
@@ -77,8 +80,8 @@ veil.innerHTML = `
     <button class="start" id="startBtn" ${saved ? `style="background:#2a2622;color:#c3c6c4"` : ""}>${saved ? "New Game" : "Take Up the Blade"}</button>
   </div>
   <div style="font-size:12px;color:#5a5f5a;letter-spacing:.08em;max-width:640px;text-align:center;line-height:1.8">
-    <b>Click / tap</b> to move · tap a foe to fight · tap to search &amp; gather · dodge with <b>Space</b>/<b>right-click</b> or the <b>↺</b> button<br/>
-    hotbar <b>1–5</b> or tap a slot · pack <b>Tab</b>/<b>▤</b> · skills <b>C</b>/<b>✦</b> · the <b>town board</b> and <b>waystone</b> in your yard manage the settlement &amp; expeditions
+    Everything is a click — no keyboard needed. <b>Click</b> to move, fight, search and gather · <b>↺</b> to dodge<br/>
+    the tabs on the right open your <b>Pack</b>, <b>Skills</b>, <b>Settlement</b>, <b>Expedition</b> map and <b>Stash</b> from anywhere
   </div>`;
 app.appendChild(veil);
 
@@ -101,7 +104,9 @@ const cycleTimer = window.setInterval(cycle, 4200);
 
 audio.setScene("menu");
 
-const dismiss = () => { clearInterval(cycleTimer); veil.style.opacity = "0"; window.setTimeout(() => veil.remove(), 1200); };
+// Fading it out is cosmetic; stop it blocking clicks on the game underneath
+// (same z-index as modal panels) the instant the fade starts, not 1.2s later.
+const dismiss = () => { clearInterval(cycleTimer); veil.style.opacity = "0"; veil.style.pointerEvents = "none"; window.setTimeout(() => veil.remove(), 1200); };
 
 veil.querySelector<HTMLButtonElement>("#continueBtn")?.addEventListener("click", () => {
   if (!saved) return;

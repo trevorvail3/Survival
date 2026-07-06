@@ -19,16 +19,16 @@ const STEPS: Step[] = [
   { signal: "move", task: "Click the ground to walk there.", done: "You go where you point." },
   { signal: "gather", task: "Click a tree in your yard to fell timber.", done: "Timber, stone and ore raise your settlement." },
   { signal: "search", task: "Click a chest or barrel to search it.", done: "Scavenge all you can — supplies are scarce." },
-  { signal: "pack", task: "Open your pack (Tab, or the ▤ button) to craft or equip.", done: "Craft poultices and arms from what you gather." },
+  { signal: "pack", task: "Open your Pack (the ▤ tab) to craft or equip.", done: "Craft poultices and arms from what you gather." },
   { signal: "board", task: "Click the town board to manage your settlement.", done: "Raise walls and forge here; assign the folk you save." },
   { signal: "travel", task: "Click the waystone to set out on an expedition.", done: "Range out by day — be behind your walls before dark." },
   { signal: "rescue", task: "Out in the wilds, find and rescue a survivor.", done: "Bring them home. Your settlement grows. Good luck." },
 ];
 
 const HINTS: Record<string, string> = {
-  hurt: "Wounded — press 1 to bind it with a Poultice.",
+  hurt: "Wounded — tap the Poultice in your hotbar to bind it.",
   night: "Night falls. The dead grow bold — keep to the light or head home.",
-  infected: "The plague festers in your blood — press 5 for an Antidote.",
+  infected: "The plague festers in your blood — tap the Antidote in your hotbar.",
   boss: "A great foe stirs nearby. Come armed — or flee.",
 };
 
