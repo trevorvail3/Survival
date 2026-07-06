@@ -34,6 +34,13 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   antidote: def({ id: "antidote", name: "Antidote", shape: "vial", material: "toxic", stack: 10, use: "cure", cure: 60, heal: 8, desc: "A feverfew brew that beats the plague back." }),
   firebomb: def({ id: "firebomb", name: "Firepot", shape: "firebomb", material: "glass", stack: 8, use: "throw", throwDamage: 55, throwRadius: 2.2, fire: true, desc: "A sealed pot of oil and flame. The dead fear fire." }),
 
+  // --- Gathering tools ---
+  // Held in your pack; the right tool turns a resource node into a proper
+  // activity and works it faster. Fishing needs a rod at all.
+  felling_axe: def({ id: "felling_axe", name: "Felling Axe", shape: "axe", material: "iron", stack: 1, use: "none", tool: "woodcutting", desc: "A broad-bladed axe for timber. Bites deep, drops trees fast." }),
+  pickaxe: def({ id: "pickaxe", name: "Pickaxe", shape: "pick", material: "iron", stack: 1, use: "none", tool: "mining", desc: "Iron-headed pick for stone and ore. Rings on every swing." }),
+  fishing_rod: def({ id: "fishing_rod", name: "Fishing Rod", shape: "rod", material: "wood", stack: 1, use: "none", tool: "fishing", desc: "A rod and line. You'll catch nothing at the water without it." }),
+
   // --- Ammunition ---
   arrow: def({ id: "arrow", name: "Arrows", shape: "arrow", material: "wood", stack: 80, use: "none", desc: "Fletched shafts. Never enough in the quiver." }),
   bolt: def({ id: "bolt", name: "Bolts", shape: "arrow", material: "iron", stack: 60, use: "none", desc: "Stubby iron quarrels. A crossbow spits them through mail." }),
