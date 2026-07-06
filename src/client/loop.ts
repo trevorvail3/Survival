@@ -111,7 +111,7 @@ export class Game {
     // --- Input: click only. Pack/Skills/Settlement/Travel/Stash open from the
     // tab bar (see Hud.buildTabBar) — there is no keyboard control surface. ---
     const zf = this.input.consumeZoom();
-    if (zf !== 1) this.zoom = Math.max(1, Math.min(3.5, this.zoom * zf));
+    if (zf !== 1) this.zoom = Math.max(0.5, Math.min(3.5, this.zoom * zf));
     const click = this.input.consumeClick();
     if (click && p.alive && !this.hud.isModalOpen) this.handleClick(click.x, click.y);
 
