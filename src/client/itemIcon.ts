@@ -120,6 +120,10 @@ function draw(shape: string, p: Pal, id: string): string {
       return `<g transform="rotate(${45 + r} 16 16)"><rect x="15" y="6" width="2" height="24" fill="${WOOD}" stroke="${WOODX}" stroke-width="0.6"/><polygon points="16,1 18,7 16,9 14,7" fill="${p.base}" stroke="${p.edge}" stroke-width="0.8"/><path d="M17,7 Q25,6 24,13 Q19,12 16,13 Z" fill="${p.base}" stroke="${p.edge}" stroke-width="0.9"/><path d="M15,9 Q9,10 10,14" stroke="${p.dark}" stroke-width="1.4" fill="none"/></g>`;
     case "crossbow":
       return `<g transform="rotate(${r} 16 16)"><rect x="14.5" y="8" width="3" height="18" rx="1" fill="${WOOD}" stroke="${WOODX}" stroke-width="0.8"/><path d="M4,12 Q16,8 28,12" fill="none" stroke="${p.base}" stroke-width="2.6" stroke-linecap="round"/><line x1="4" y1="12" x2="28" y2="12" stroke="${p.light}" stroke-width="0.8" opacity="0.7"/><polygon points="16,8 18,12 14,12" fill="${p.dark}"/></g>`;
+    case "pick":
+      return `<g transform="rotate(${30 + r} 16 16)"><rect x="14.5" y="5" width="3" height="24" rx="1" fill="${WOOD}" stroke="${WOODX}" stroke-width="0.8"/><path d="M4,9 Q16,4 28,9" fill="none" stroke="${p.base}" stroke-width="2.6" stroke-linecap="round"/><path d="M4,9 Q16,6 28,9" fill="none" stroke="${p.light}" stroke-width="0.8" opacity="0.6"/></g>`;
+    case "rod":
+      return `<g transform="rotate(${20 + r} 16 16)"><line x1="7" y1="27" x2="24" y2="5" stroke="${WOOD}" stroke-width="2" stroke-linecap="round"/><rect x="6" y="25" width="4" height="5" rx="1.5" fill="${WOODX}"/><path d="M24,5 Q27,12 22,15" fill="none" stroke="${p.light}" stroke-width="0.7" opacity="0.8"/><circle cx="22" cy="16" r="1.3" fill="${p.base}"/></g>`;
     // --- Armour silhouettes by slot ---
     case "helm":
       return `<path d="M7,15 Q7,5 16,5 Q25,5 25,15 L25,20 Q25,24 16,24 Q7,24 7,20 Z" fill="${p.base}" stroke="${p.edge}" stroke-width="1.2"/><rect x="14.5" y="12" width="3" height="12" fill="${p.dark}"/><rect x="9" y="13" width="14" height="2.4" fill="${p.dark}" opacity="0.7"/><path d="M10,10 Q16,7 22,10" stroke="${p.light}" stroke-width="1" fill="none" opacity="0.5"/>`;

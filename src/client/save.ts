@@ -49,6 +49,8 @@ export function loadGame(): { seed: number; world: World } | null {
     }
     // Off-hand (shield) slot added after armour slots.
     if (!("offhand" in pl)) pl["offhand"] = null;
+    // Gathering-activity state added later.
+    if (!("gathering" in pl)) pl["gathering"] = null;
     const w = blob.world as unknown as Record<string, unknown>;
     if (typeof w["won"] !== "boolean") w["won"] = false;
     if (!Array.isArray(w["stash"])) w["stash"] = new Array(48).fill(null);

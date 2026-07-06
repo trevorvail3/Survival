@@ -34,6 +34,9 @@ export interface AvatarAnim {
   swing?: number;
   rolling?: boolean;
   hurt?: boolean;
+  /** An in-progress gathering activity — draws the tool in hand and drives a
+   *  repeating work-swing (chop / mine / cast). */
+  gather?: "axe" | "pick" | "rod" | "hands";
 }
 
 function shade(hex: string, amt: number): string {
@@ -143,11 +146,14 @@ export function drawSurvivor(
     g.beginPath(); g.moveTo(tx, R(-0.2)); g.lineTo(tx, R(0.14)); g.stroke();
   }
 
-  // Arms + weapon. The far arm sits behind the torso; the near arm holds the
-  // weapon and swings forward through an attack (no more whole-body rotation).
-  const swingAmt = anim.swing != null ? (1 - anim.swing) : 0;
+  // Arms + weapon/tool. The far arm sits behind the torso; the near arm holds
+  // the weapon and swings forward through an attack. While gathering, the near
+  // arm works a tool on a steady repeating swing (chop / mine / cast).
+  const held: string = anim.gather ?? weapon;
+  const gatherSwing = anim.gather ? Math.abs(Math.sin(t / 150)) : null; // 0..1 repeating
+  const swingAmt = gatherSwing != null ? gatherSwing : (anim.swing != null ? (1 - anim.swing) : 0);
   const armReach = R(0.36);
-  const sweep = weapon === "bow" ? 0 : (swingAmt - 0.5) * 1.6;
+  const sweep = held === "bow" || held === "rod" ? 0 : (swingAmt - 0.5) * 1.6;
   const farShoulderX = sideOn ? R(-0.02) : R(0.18);
   const nearShoulderX = sideOn ? R(0.1) : R(-0.18);
 
@@ -156,11 +162,11 @@ export function drawSurvivor(
   const handY = R(-0.16) + armReach * 0.75 - Math.cos(sweep) * armReach * 0.25;
   drawArm(g, nearShoulderX, R(-0.16), handX, handY, look, R);
 
-  // Weapon in the near hand, angled along the swing.
+  // Weapon/tool in the near hand, angled along the swing.
   g.save();
   g.translate(handX, handY);
   g.rotate(-Math.PI / 2 + sweep * 0.9); // rest pointing "up" from the hand
-  drawWeapon(g, R, weapon);
+  drawWeapon(g, R, held);
   g.restore();
 
   // Head / hood on top.
@@ -206,9 +212,24 @@ function drawArm(
   g.fill();
 }
 
-function drawWeapon(g: CanvasRenderingContext2D, R: (u: number) => number, kind: WeaponKind): void {
+function drawWeapon(g: CanvasRenderingContext2D, R: (u: number) => number, kind: string): void {
   g.lineCap = "round";
   switch (kind) {
+    case "pick":
+      // A pickaxe: haft with a curved double-head.
+      g.strokeStyle = "#5a4028"; g.lineWidth = R(0.06);
+      g.beginPath(); g.moveTo(0, R(0.12)); g.lineTo(0, R(-0.44)); g.stroke();
+      g.strokeStyle = "#8a9096"; g.lineWidth = R(0.05);
+      g.beginPath(); g.moveTo(R(-0.18), R(-0.52)); g.quadraticCurveTo(0, R(-0.4), R(0.18), R(-0.52)); g.stroke();
+      break;
+    case "rod": {
+      // A fishing rod: a long thin pole with a hanging line.
+      g.strokeStyle = "#6b4a2a"; g.lineWidth = R(0.035);
+      g.beginPath(); g.moveTo(0, R(0.12)); g.lineTo(0, R(-0.58)); g.stroke();
+      g.strokeStyle = "rgba(220,225,230,0.7)"; g.lineWidth = R(0.012);
+      g.beginPath(); g.moveTo(0, R(-0.58)); g.lineTo(R(0.14), R(-0.2)); g.stroke();
+      break;
+    }
     case "blade":
       g.strokeStyle = "#c9ccd0";
       g.lineWidth = R(0.05);

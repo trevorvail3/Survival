@@ -338,6 +338,7 @@ export function createWorld(content: Content, rng: () => number): World {
     nextAttack: 0,
     infection: 0,
     alive: true,
+    gathering: null,
     level: 1,
     xp: 0,
     points: 0,
@@ -345,6 +346,10 @@ export function createWorld(content: Content, rng: () => number): World {
     trained: {},
   };
   addItem(player, content, "rusty_sword", 1);
+  // Starting tools so gathering is an activity from turn one, not a wall.
+  addItem(player, content, "felling_axe", 1);
+  addItem(player, content, "pickaxe", 1);
+  addItem(player, content, "fishing_rod", 1);
   addItem(player, content, "poultice", 2);
   addItem(player, content, "bread", 1);
   addItem(player, content, "waterskin", 1);
@@ -432,6 +437,7 @@ export function travelTo(world: World, content: Content, rng: () => number, targ
   p.pos = { x: world.entry.x + 0.5, y: world.entry.y + 0.5 };
   p.path = [];
   p.order = { type: "none" };
+  p.gathering = null;
   return true;
 }
 
@@ -465,17 +471,20 @@ function makeEnemy(world: World, content: Content, kind: EnemyKind, x: number, y
 
 export function orderMove(world: World, tx: number, ty: number): void {
   const walk = makeTileWalkable(world);
+  world.player.gathering = null; // moving away breaks off any gathering
   world.player.order = { type: "move", to: { x: tx, y: ty } };
   world.player.path = findPath(walk, world.player.pos, { x: tx, y: ty });
 }
 export function orderInteract(world: World, prop: Prop): void {
   const walk = makeTileWalkable(world);
+  world.player.gathering = null;
   world.player.order = { type: "interact", propId: prop.id };
   const r = pathToAdjacent(walk, world.player.pos, prop.pos);
   world.player.path = r.path;
 }
 export function orderAttack(world: World, enemy: Enemy): void {
   const walk = makeTileWalkable(world);
+  world.player.gathering = null;
   world.player.order = { type: "attack", enemyId: enemy.id };
   const r = pathToAdjacent(walk, world.player.pos, enemy.pos);
   world.player.path = r.path;
@@ -800,29 +809,93 @@ function resolveInteract(world: World, content: Content, ctx: { rng: () => numbe
   // Searchable / gatherable.
   if (pr.used) { out.push({ t: "log", msg: "Nothing left here." }); return; }
   const nodeSkill = NODE_SKILL[pr.kind]; // set only for gather nodes
-  const isNode = !!nodeSkill;
-  if (isNode && pr.reqLevel && skillLevel(world, nodeSkill!) < pr.reqLevel) {
-    out.push({ t: "log", msg: `This lode needs ${SKILL_META[nodeSkill!].name} ${pr.reqLevel} to work.` });
+  const pm = playerMods(world.player);
+
+  if (nodeSkill) {
+    // A resource node is an ACTIVITY: chop / mine / fish over several swings,
+    // one unit per swing, until it's worked out. It starts here; advanceGather
+    // (called each tick) dispenses the yield. A tool speeds it; fishing needs one.
+    if (pr.reqLevel && skillLevel(world, nodeSkill) < pr.reqLevel) {
+      out.push({ t: "log", msg: `This lode needs ${SKILL_META[nodeSkill].name} ${pr.reqLevel} to work.` });
+      return;
+    }
+    const hasTool = hasToolFor(world, content, nodeSkill);
+    if (nodeSkill === "fishing" && !hasTool) {
+      out.push({ t: "log", msg: "You need a fishing rod to fish here." });
+      return;
+    }
+    const drops = rollLoot(ctx.rng, pr.loot ?? pr.kind);
+    const bonus = pm.gatherBonus + Math.floor(skillLevel(world, nodeSkill) / 12);
+    const queue: ItemId[] = [];
+    for (const d of drops) for (let i = 0; i < d.qty + bonus; i++) queue.push(d.id);
+    if (queue.length === 0) { out.push({ t: "log", msg: "Nothing to gather here." }); return; }
+    // Speed: a proper tool (or bare-handed herb-picking) is faster; higher skill
+    // shaves more off, down to a floor.
+    const toolFast = hasTool || nodeSkill === "herblore";
+    const speed = (toolFast ? 0.62 : 1) * Math.max(0.55, 1 - skillLevel(world, nodeSkill) * 0.012);
+    const interval = Math.round(GATHER_BASE_MS * speed);
+    world.player.facing = Math.atan2(pr.pos.y + 0.5 - world.player.pos.y, pr.pos.x + 0.5 - world.player.pos.x);
+    world.player.gathering = { propId: pr.id, skill: nodeSkill, queue, nextAt: world.clock + interval, interval, total: queue.length };
     return;
   }
+
+  // A one-off searchable (chest / barrel / remains / cart): instant.
   pr.used = true;
-  if (isNode) { pr.respawnAt = world.clock + RESOURCE_RESPAWN_MS; out.push({ t: "gather" }); }
-  else out.push({ t: "search" });
+  out.push({ t: "search" });
   const drops = rollLoot(ctx.rng, pr.loot ?? pr.kind);
   if (drops.length === 0) { out.push({ t: "log", msg: "Empty." }); return; }
-  const pm = playerMods(world.player);
-  // Gathering skill: a higher level in the node's skill draws out more each time.
-  const skillBonus = nodeSkill ? Math.floor(skillLevel(world, nodeSkill) / 12) : 0;
-  const bonus = (isNode ? pm.gatherBonus : pm.lootLuck) + skillBonus; // Forager / Scavenger
   for (const d of drops) {
-    const qty = d.qty + bonus;
+    const qty = d.qty + pm.lootLuck; // Scavenger
     const left = addItem(world.player, content, d.id, qty);
     const got = qty - left;
     if (got > 0) out.push({ t: "pickup", id: d.id, qty: got });
     if (left > 0) spawnGround(world, d.id, left, pr.pos.x + 0.5, pr.pos.y + 0.5);
   }
-  grantXp(world, isNode ? 4 : 6, out);
-  if (nodeSkill) grantSkillXp(world, nodeSkill, nodeSkill === "fishing" ? 14 : 16, out);
+  grantXp(world, 6, out);
+}
+
+const GATHER_BASE_MS = 1150;
+
+/** True if the pack holds a tool serving this gathering skill. */
+function hasToolFor(world: World, content: Content, skill: string): boolean {
+  for (const s of world.player.inv) {
+    if (s && content.items[s.id]?.tool === skill) return true;
+  }
+  return false;
+}
+
+/** Advance an in-progress gather: dispense one unit per swing on its timer,
+ *  then deplete the node when the queue empties. */
+function advanceGather(world: World, content: Content, out: GameEvent[]): void {
+  const p = world.player;
+  const g = p.gathering;
+  if (!g) return;
+  const pr = world.props.find((x) => x.id === g.propId);
+  if (!pr) { p.gathering = null; return; }
+  if (world.clock < g.nextAt) return;
+  p.facing = Math.atan2(pr.pos.y + 0.5 - p.pos.y, pr.pos.x + 0.5 - p.pos.x);
+  const id = g.queue.shift();
+  if (id) {
+    const left = addItem(p, content, id, 1);
+    if (left > 0) {
+      // Pack is full — spill this unit and stop, so the loss is legible.
+      spawnGround(world, id, 1, pr.pos.x + 0.5, pr.pos.y + 0.5);
+      out.push({ t: "log", msg: "Your pack is full." });
+      p.gathering = null;
+      return;
+    }
+    out.push({ t: "gather" });
+    out.push({ t: "pickup", id, qty: 1 });
+    grantSkillXp(world, g.skill as SkillId, Math.max(2, Math.round((g.skill === "fishing" ? 14 : 16) / g.total)), out);
+  }
+  if (g.queue.length === 0) {
+    pr.used = true;
+    pr.respawnAt = world.clock + RESOURCE_RESPAWN_MS;
+    grantXp(world, 4, out);
+    p.gathering = null;
+  } else {
+    g.nextAt = world.clock + g.interval;
+  }
 }
 
 /** Which trainable skill each gather-node prop trains (absent = not a node). */
@@ -1097,6 +1170,7 @@ export function tick(world: World, content: Content, ctx: { now: number; rng: ()
   }
 
   advancePlayer(world, content, ctx, dt, out);
+  advanceGather(world, content, out);
 
   // Auto-pickup ground loot.
   for (const g of world.ground) {

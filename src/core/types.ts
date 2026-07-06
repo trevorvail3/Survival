@@ -88,6 +88,9 @@ export interface ItemDef {
   throwDamage?: number;
   throwRadius?: number;
   fire?: boolean;
+  /** A gathering tool: the trainable skill it serves ("woodcutting" | "mining"
+   *  | "fishing"). Holding one in your pack speeds that activity. */
+  tool?: string;
   /** Trainable skill required to wield/wear this (SkillId), e.g. "attack". */
   reqSkill?: string;
   /** Minimum level in `reqSkill` to equip. */
@@ -251,6 +254,16 @@ export interface Player {
   nextAttack: number;
   infection: number;
   alive: boolean;
+  /** In-progress gathering activity (chop/mine/fish): dispenses one unit per
+   *  swing on a timer until the queue empties. Any new order cancels it. */
+  gathering: {
+    propId: number;
+    skill: string;
+    queue: ItemId[]; // one item id per remaining swing
+    nextAt: number; // world.clock time of the next swing
+    interval: number; // ms between swings (tool + skill scaled)
+    total: number; // original swing count (for XP split)
+  } | null;
   // --- RPG progression ---
   level: number;
   xp: number;

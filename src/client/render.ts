@@ -526,6 +526,10 @@ function drawSettlers(g: CanvasRenderingContext2D, world: World, now: number): v
 }
 
 const ARMOR_TONE: Record<string, string> = { leather: "#6e4a2c", iron: "#8a9096", steel: "#b6bcc4" };
+/** Which tool the avatar swings for each gathering skill. */
+const GATHER_TOOL: Record<string, "axe" | "pick" | "rod" | "hands"> = {
+  woodcutting: "axe", mining: "pick", fishing: "rod", herblore: "hands",
+};
 function weaponKindOf(world: World, content: Content): WeaponKind {
   const def = world.player.equipped ? content.items[world.player.equipped.id] : undefined;
   return def?.weapon?.kind ?? "fist";
@@ -585,6 +589,7 @@ export function drawWorld(
     const anim: AvatarAnim = { now, moving: p.path.length > 0 };
     const since = p.nextAttack - world.clock;
     if (since > 0) anim.swing = Math.min(1, Math.max(0, since / 240));
+    if (p.gathering) anim.gather = GATHER_TOOL[p.gathering.skill] ?? "hands";
     drawSurvivor(g, p.pos.x * TILE, p.pos.y * TILE, TILE, p.facing, DEFAULT_LOOK, anim, weaponKindOf(world, content), armorToneOf(world, content));
   }
   g.restore();
