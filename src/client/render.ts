@@ -35,6 +35,30 @@ function discSprite(key: string, r: number, stops: [number, string][]): HTMLCanv
   return c;
 }
 
+// Resource-node art lifted from the Varath project's SVG icon set (line-art on
+// a 24×24 grid). We render them onto the canvas world as cached tinted images.
+const RES_ART: Record<string, string> = {
+  tree: '<path d="M12 3l5 7h-3l4 6H7l4-6H8z"/><path d="M12 16v5"/>',
+  ore: '<path d="M4 15l4-6 5 2 4-4 3 5-6 8-3-1-4 2z"/><path d="M8 9l1 4 4 1"/>',
+  herb: '<path d="M12 21c0-6-3-9-7-10 4-1 6 1 7 3 1-2 3-4 7-3-4 1-7 4-7 10z"/><path d="M12 11v10"/>',
+  fish: '<path d="M3 12c4-6 12-6 16 0-4 6-12 6-16 0z"/><path d="M19 12c2-1 2-3 2-4 0 1 0 3 0 4s0 3 0 4c0-1 0-3-2-4z"/><circle cx="8" cy="11" r="1"/>',
+};
+const resImgCache = new Map<string, HTMLImageElement>();
+/** A tinted SVG resource icon as an <img> (lazily built, drawn once loaded). */
+function resImage(art: string, color: string): HTMLImageElement | null {
+  const inner = RES_ART[art];
+  if (!inner) return null;
+  const key = art + color;
+  let img = resImgCache.get(key);
+  if (!img) {
+    img = new Image();
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="${color}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+    img.src = "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+    resImgCache.set(key, img);
+  }
+  return img;
+}
+
 const TILE_COLORS: Record<TileType, [string, string]> = {
   grass: ["#33402a", "#28331f"],
   path: ["#4a3d2a", "#3a2f20"],
@@ -213,36 +237,32 @@ function drawProp(g: CanvasRenderingContext2D, pr: Prop, now: number): void {
       g.fillStyle = "#c8b06a"; for (let i = 0; i < 3; i++) g.fillRect(cx - TILE * 0.26, cy - TILE * 0.36 + i * 5, TILE * 0.5, 1.5);
       break;
     case "tree":
-      if (depleted) {
-        g.fillStyle = "#4a3826"; g.beginPath(); g.arc(cx, cy, TILE * 0.16, 0, Math.PI * 2); g.fill();
-      } else {
-        g.fillStyle = "#3a2a18"; g.fillRect(cx - 3, cy - 2, 6, TILE * 0.4);
-        g.fillStyle = "#2b3d22"; g.beginPath(); g.arc(cx, cy - TILE * 0.28, TILE * 0.4, 0, Math.PI * 2); g.fill();
-        g.fillStyle = "#33482a"; g.beginPath(); g.arc(cx - TILE * 0.16, cy - TILE * 0.36, TILE * 0.22, 0, Math.PI * 2); g.fill();
-      }
-      break;
     case "rock":
-      g.globalAlpha = depleted ? 0.6 : 1;
-      g.fillStyle = "#5a5750"; g.beginPath();
-      g.moveTo(cx - TILE * 0.3, cy + TILE * 0.2); g.lineTo(cx - TILE * 0.2, cy - TILE * 0.24); g.lineTo(cx + TILE * 0.16, cy - TILE * 0.28); g.lineTo(cx + TILE * 0.32, cy + TILE * 0.12); g.lineTo(cx + TILE * 0.1, cy + TILE * 0.26); g.closePath(); g.fill();
-      g.strokeStyle = "#2c2a26"; g.lineWidth = 1.5; g.stroke();
-      if (!depleted) { g.fillStyle = "#b58a4a"; g.beginPath(); g.arc(cx + 3, cy, 2, 0, Math.PI * 2); g.arc(cx - 5, cy - 4, 1.6, 0, Math.PI * 2); g.fill(); }
-      break;
     case "herbs":
-      if (depleted) { g.strokeStyle = "rgba(90,110,60,0.4)"; g.lineWidth = 1; g.beginPath(); g.moveTo(cx, cy + 4); g.lineTo(cx, cy - 2); g.stroke(); }
-      else {
-        g.strokeStyle = "#4a6a3a"; g.lineWidth = 1.5;
-        for (let i = -2; i <= 2; i++) { g.beginPath(); g.moveTo(cx, cy + 5); g.lineTo(cx + i * 4, cy - 8); g.stroke(); }
-        g.fillStyle = "#a7c04a"; for (let i = -1; i <= 1; i++) { g.beginPath(); g.arc(cx + i * 5, cy - 8, 2, 0, Math.PI * 2); g.fill(); }
+    case "fishpool": {
+      // Varath SVG resource art, tinted per node and drawn as a canvas image.
+      const NODE: Record<string, { art: string; col: string }> = {
+        tree: { art: "tree", col: "#7fae5a" },
+        rock: { art: "ore", col: "#cdb277" },
+        herbs: { art: "herb", col: "#a7c04a" },
+        fishpool: { art: "fish", col: "#8fbcd0" },
+      };
+      const nd = NODE[pr.kind]!;
+      // A soft ground disc marks it as a workable node; ripple for fishing.
+      const disc = discSprite("noded", 32, [[0, "rgba(0,0,0,0.4)"], [1, "rgba(0,0,0,0)"]]);
+      g.globalAlpha = depleted ? 0.4 : 1;
+      g.drawImage(disc, cx - TILE * 0.5, cy - TILE * 0.32, TILE, TILE * 0.7);
+      if (pr.kind === "fishpool" && !depleted) {
+        g.strokeStyle = "rgba(120,170,196,0.5)"; g.lineWidth = 1.2;
+        for (let i = 1; i <= 2; i++) { g.beginPath(); g.arc(cx, cy + TILE * 0.24, i * 4 + Math.sin(now / 500 + i) * 1.2, 0, Math.PI * 2); g.stroke(); }
       }
+      const img = resImage(nd.art, nd.col);
+      const s = TILE * (depleted ? 0.62 : 0.92);
+      const bob = depleted ? 0 : Math.sin(now / 720 + cx) * 1.3;
+      if (img && img.complete && img.naturalWidth) g.drawImage(img, cx - s / 2, cy - s / 2 + bob, s, s);
+      else { g.fillStyle = nd.col; g.globalAlpha *= 0.5; g.beginPath(); g.arc(cx, cy, TILE * 0.2, 0, Math.PI * 2); g.fill(); }
       break;
-    case "fishpool":
-      // Concentric ripples on the water's edge; dims while fished out.
-      g.globalAlpha = depleted ? 0.4 : 0.9;
-      g.strokeStyle = "#6f9bb0"; g.lineWidth = 1.4;
-      for (let i = 1; i <= 3; i++) { g.beginPath(); g.arc(cx, cy, i * 3 + Math.sin(now / 500 + i) * 1.2, 0, Math.PI * 2); g.stroke(); }
-      if (!depleted) { g.fillStyle = "#9fc3d4"; g.beginPath(); g.arc(cx, cy, 1.6, 0, Math.PI * 2); g.fill(); }
-      break;
+    }
     case "survivor":
       if (!depleted) {
         // A kneeling figure with a faint hopeful glow.

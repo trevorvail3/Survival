@@ -364,7 +364,14 @@ export class Game {
         case "cure": audio.play("heal"); this.hud.pushLog("The fever recedes."); break;
         case "equip": audio.play("equip"); break;
         case "dayBreak": audio.play("daybreak"); if (this.world.zoneId === "home") audio.setScene("day"); this.hud.showBanner(`Day ${e.day}`, "You saw the dawn.", 2200); break;
-        case "nightFall": audio.play("nightfall"); if (this.world.zoneId === "home") audio.setScene("night"); this.hud.showBanner("Nightfall", "The dead walk. Hold your walls.", 2200); this.tut("night"); break;
+        case "nightFall": {
+          audio.play("nightfall");
+          const home = this.world.zoneId === "home";
+          if (home) audio.setScene("night");
+          this.hud.showBanner("Nightfall", home ? "The dark settles over the castle. You are safe within the walls." : "The dead walk. Get behind your walls.", 2200);
+          this.tut("night");
+          break;
+        }
         case "downed":
           audio.play("death"); audio.setScene("day"); audio.setBossMusic(false);
           this.snapCamera();
