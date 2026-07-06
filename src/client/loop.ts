@@ -342,7 +342,13 @@ export class Game {
         case "drop": {
           const rm = RARITY_META[e.rarity as Rarity]; const nm = this.content.items[e.id]?.name ?? e.id;
           this.hud.pushLog(`Dropped: <span style="color:${rm?.color ?? "#ccc"}">${rm?.name ?? ""} ${nm}</span> ◈${e.power}`);
-          if (e.rarity === "epic" || e.rarity === "legendary") { audio.play("levelup"); this.hud.tip(`<span style="color:${rm.color}">${rm.name}</span> drop — <b>${nm}</b> ◈${e.power}`); }
+          if (e.guaranteed) {
+            // The raid payoff — always a banner moment, whatever the rarity.
+            audio.play("levelup"); audio.sting();
+            this.hud.showBanner("Raid Cache", `<span style="color:${rm.color}">${rm.name}</span> ${nm} — ◈${e.power}`, 3600);
+          } else if (e.rarity === "epic" || e.rarity === "legendary") {
+            audio.play("levelup"); this.hud.tip(`<span style="color:${rm.color}">${rm.name}</span> drop — <b>${nm}</b> ◈${e.power}`);
+          }
           break;
         }
         case "salvage": audio.play("craft"); this.hud.pushLog(`Salvaged into ${e.qty}× ${this.content.items[e.id]?.name ?? e.id}.`); break;

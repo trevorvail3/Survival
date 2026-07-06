@@ -65,6 +65,8 @@ export class Hud {
   private tracker: HTMLElement;
   private tipEl: HTMLElement;
   private banner: HTMLElement;
+  private bannerQueue: { title: string; sub: string; hold: number }[] = [];
+  private bannerTimer = 0;
   private backdrop: HTMLElement;
   private inspectEl: HTMLElement;
   private inspectTimer = 0;
@@ -353,12 +355,26 @@ export class Hud {
     if (x) x.onclick = () => this.closeAll();
   }
 
+  /** Queues a banner rather than showing it immediately — several GameEvents
+   *  (a boss kill's levelUp + guaranteed drop, say) can fire in the same
+   *  dispatch, and overwriting a still-visible banner mid-hold loses it. */
   showBanner(title: string, sub: string, hold = 2200): void {
-    this.banner.innerHTML = `<h1>${title}</h1><p>${sub}</p>`;
+    this.bannerQueue.push({ title, sub, hold });
+    if (!this.bannerTimer) this.advanceBanner();
+  }
+  private advanceBanner(): void {
+    const next = this.bannerQueue.shift();
+    if (!next) { this.bannerTimer = 0; return; }
+    this.banner.innerHTML = `<h1>${next.title}</h1><p>${next.sub}</p>`;
     this.banner.style.opacity = "1";
-    window.setTimeout(() => { this.banner.style.opacity = "0"; }, hold);
+    this.bannerTimer = window.setTimeout(() => {
+      this.banner.style.opacity = "0";
+      this.bannerTimer = window.setTimeout(() => this.advanceBanner(), 500);
+    }, next.hold);
   }
   showDeath(day: number): void {
+    this.bannerQueue.length = 0;
+    if (this.bannerTimer) { window.clearTimeout(this.bannerTimer); this.bannerTimer = 0; }
     this.banner.innerHTML = `<h1>You Fell</h1><p>You held ${day} ${day === 1 ? "day" : "days"} against the dark.</p><p style="margin-top:14px"><button class="act" id="restartBtn">Begin Again</button></p>`;
     this.banner.style.opacity = "1";
     this.banner.style.pointerEvents = "auto";

@@ -37,17 +37,21 @@ export function rarityOf(slot: InvSlot | null | undefined): Rarity {
   return r && (RARITIES as string[]).includes(r) ? (r as Rarity) : "common";
 }
 
-/** Weighted rarity roll; a region's danger tilts the odds toward the rarer end. */
-export function rollRarity(rng: () => number, danger: number): Rarity {
+/** Weighted rarity roll; a region's danger tilts the odds toward the rarer end.
+ *  `minRarity` clamps the result up (never down) — the guaranteed floor on a
+ *  boss's raid-cache drop, for instance. */
+export function rollRarity(rng: () => number, danger: number, minRarity?: Rarity): Rarity {
   const tilt = 1 + danger * 0.6; // deeper regions: rarer weights scale up
   const weights = RARITIES.map((r, i) => RARITY_META[r].weight / Math.pow(tilt, RARITIES.length - 1 - i));
   const total = weights.reduce((a, b) => a + b, 0);
   let roll = rng() * total;
+  let result: Rarity = "common";
   for (let i = 0; i < RARITIES.length; i++) {
     roll -= weights[i]!;
-    if (roll <= 0) return RARITIES[i]!;
+    if (roll <= 0) { result = RARITIES[i]!; break; }
   }
-  return "common";
+  if (minRarity && RARITIES.indexOf(result) < RARITIES.indexOf(minRarity)) return minRarity;
+  return result;
 }
 
 /** Roll a Power value for a drop around a region's power band + rarity bonus. */
