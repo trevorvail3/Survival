@@ -63,24 +63,24 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   iron_sword: def({ id: "iron_sword", name: "Iron Sword", shape: "sword", material: "iron", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "blade", damage: 34, reach: 1.4, cooldown: 950 }, desc: "Forge-true steel. The soldier's answer." }),
   steel_sword: def({ id: "steel_sword", name: "Steel Longsword", shape: "sword", material: "steel", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "blade", damage: 48, reach: 1.5, cooldown: 900 }, desc: "A knight's blade. It remembers its purpose." }),
 
-  // Reach — polearms hold foes at bay; the halberd sweeps.
-  spear: def({ id: "spear", name: "Boar Spear", shape: "spear", material: "iron", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "spear", damage: 20, reach: 2.0, cooldown: 1150 }, desc: "Reach beats strength when the reach is enough." }),
-  halberd: def({ id: "halberd", name: "Halberd", shape: "halberd", material: "steel", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "spear", damage: 34, reach: 2.5, cooldown: 1300, cleave: true }, desc: "Axe, spike and hook on a long haft. It sweeps a whole rank." }),
+  // Reach — polearms hold foes at bay; the halberd sweeps (two-handed).
+  spear: def({ id: "spear", name: "Boar Spear", shape: "spear", material: "iron", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "spear", damage: 20, reach: 2.0, cooldown: 1150 }, desc: "Reach beats strength when the reach is enough. Leaves a hand for a shield." }),
+  halberd: def({ id: "halberd", name: "Halberd", shape: "halberd", material: "steel", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "spear", damage: 34, reach: 2.5, cooldown: 1300, cleave: true, twoHanded: true }, desc: "Axe, spike and hook on a long haft. It sweeps a whole rank." }),
 
   // Blunt & anti-armour — slow, but they pierce the dead's plate and bone.
-  warmace: def({ id: "warmace", name: "War Mace", shape: "mace", material: "steel", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "blunt", damage: 44, reach: 1.3, cooldown: 1250, armorPen: 6 }, desc: "Heavy iron head. Armour and bone alike give way." }),
-  warhammer: def({ id: "warhammer", name: "War Hammer", shape: "warhammer", material: "steel", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "blunt", damage: 50, reach: 1.3, cooldown: 1350, armorPen: 9 }, desc: "A spiked maul. Nothing's armour means much to it." }),
+  warmace: def({ id: "warmace", name: "War Mace", shape: "mace", material: "steel", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "blunt", damage: 44, reach: 1.3, cooldown: 1250, armorPen: 6 }, desc: "Heavy iron head. Armour and bone alike give way — and a hand to spare for a shield." }),
+  warhammer: def({ id: "warhammer", name: "War Hammer", shape: "warhammer", material: "steel", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "blunt", damage: 50, reach: 1.3, cooldown: 1350, armorPen: 9, twoHanded: true }, desc: "A great spiked maul. Nothing's armour means much to it." }),
 
-  // Great weapons — heavy, slow, and they cleave everything in the arc.
-  battleaxe: def({ id: "battleaxe", name: "Battle Axe", shape: "greataxe", material: "iron", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "axe", damage: 40, reach: 1.5, cooldown: 1300, armorPen: 4, cleave: true }, desc: "Two hands, one wide arc. It doesn't stop at the first body." }),
-  greataxe: def({ id: "greataxe", name: "Headsman's Axe", shape: "greataxe", material: "steel", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "axe", damage: 58, reach: 1.6, cooldown: 1500, armorPen: 6, cleave: true }, desc: "A great crescent of steel. It ends arguments." }),
-  greatsword: def({ id: "greatsword", name: "Greatsword", shape: "greatsword", material: "steel", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "blade", damage: 52, reach: 1.8, cooldown: 1250, cleave: true }, desc: "As long as a man is tall. Wide, sweeping ruin." }),
+  // Great weapons — heavy, slow, two-handed, and they cleave everything in the arc.
+  battleaxe: def({ id: "battleaxe", name: "Battle Axe", shape: "greataxe", material: "iron", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "axe", damage: 40, reach: 1.5, cooldown: 1300, armorPen: 4, cleave: true, twoHanded: true }, desc: "Two hands, one wide arc. It doesn't stop at the first body." }),
+  greataxe: def({ id: "greataxe", name: "Headsman's Axe", shape: "greataxe", material: "steel", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "axe", damage: 58, reach: 1.6, cooldown: 1500, armorPen: 6, cleave: true, twoHanded: true }, desc: "A great crescent of steel. It ends arguments." }),
+  greatsword: def({ id: "greatsword", name: "Greatsword", shape: "greatsword", material: "steel", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "blade", damage: 52, reach: 1.8, cooldown: 1250, cleave: true, twoHanded: true }, desc: "As long as a man is tall. Wide, sweeping ruin." }),
 
-  // Ranged — bows and the armour-piercing crossbow.
-  shortbow: def({ id: "shortbow", name: "Short Bow", shape: "bow", material: "wood", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "bow", damage: 20, reach: 6, cooldown: 800, ammo: "arrow" }, desc: "Quick to draw, quick to loose. Keeps them at arm's reach." }),
-  warbow: def({ id: "warbow", name: "War Bow", shape: "bow", material: "wood", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "bow", damage: 30, reach: 7, cooldown: 1400, ammo: "arrow" }, desc: "Yew and sinew. Death before they reach the wall." }),
-  longbow: def({ id: "longbow", name: "Long Bow", shape: "bow", material: "wood", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "bow", damage: 38, reach: 9, cooldown: 1500, ammo: "arrow" }, desc: "A tall bow of war. It reaches farther than anything walks." }),
-  crossbow: def({ id: "crossbow", name: "Crossbow", shape: "crossbow", material: "iron", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "crossbow", damage: 54, reach: 8, cooldown: 1900, armorPen: 6, ammo: "bolt" }, desc: "Slow to crank, but a bolt punches clean through mail." }),
+  // Ranged — bows and the armour-piercing crossbow (all two-handed).
+  shortbow: def({ id: "shortbow", name: "Short Bow", shape: "bow", material: "wood", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "bow", damage: 20, reach: 6, cooldown: 800, ammo: "arrow", twoHanded: true }, desc: "Quick to draw, quick to loose. Keeps them at arm's reach." }),
+  warbow: def({ id: "warbow", name: "War Bow", shape: "bow", material: "wood", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "bow", damage: 30, reach: 7, cooldown: 1400, ammo: "arrow", twoHanded: true }, desc: "Yew and sinew. Death before they reach the wall." }),
+  longbow: def({ id: "longbow", name: "Long Bow", shape: "bow", material: "wood", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "bow", damage: 38, reach: 9, cooldown: 1500, ammo: "arrow", twoHanded: true }, desc: "A tall bow of war. It reaches farther than anything walks." }),
+  crossbow: def({ id: "crossbow", name: "Crossbow", shape: "crossbow", material: "iron", stack: 1, use: "equip", slot: "weapon", weapon: { kind: "crossbow", damage: 54, reach: 8, cooldown: 1900, armorPen: 6, ammo: "bolt", twoHanded: true }, desc: "Slow to crank, but a bolt punches clean through mail." }),
 
   // --- Armour ---
   // Five slots (head/body/hands/legs/feet), three material tiers each. Body is
@@ -111,6 +111,14 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   worn_boots: def({ id: "worn_boots", name: "Worn Boots", shape: "boots", material: "leather", stack: 1, use: "equip", slot: "feet", armor: 1, desc: "Cracked leather. Dry feet, most days." }),
   mail_sabatons: def({ id: "mail_sabatons", name: "Mail Sabatons", shape: "boots", material: "iron", stack: 1, use: "equip", slot: "feet", armor: 3, desc: "Ringed overshoes. The mire still finds a way in." }),
   plate_sabatons: def({ id: "plate_sabatons", name: "Plate Sabatons", shape: "boots", material: "steel", stack: 1, use: "equip", slot: "feet", armor: 5, desc: "Steel-shod feet. You stand where you please." }),
+
+  // --- Shields (off-hand) ---
+  // A shield trades a two-handed weapon's raw power for heavy soak. It fills the
+  // off-hand, so you can only carry one alongside a ONE-handed weapon — the
+  // sword-and-board playstyle against the great-weapon glass cannon.
+  buckler: def({ id: "buckler", name: "Buckler", shape: "shield", material: "wood", stack: 1, use: "equip", slot: "offhand", armor: 4, desc: "A small round shield. Turns a blow, if you're quick with it." }),
+  kite_shield: def({ id: "kite_shield", name: "Kite Shield", shape: "shield", material: "iron", stack: 1, use: "equip", slot: "offhand", armor: 8, desc: "Iron-rimmed and tall. A wall you carry on one arm." }),
+  tower_shield: def({ id: "tower_shield", name: "Tower Shield", shape: "shield", material: "steel", stack: 1, use: "equip", slot: "offhand", armor: 13, desc: "A slab of banded steel. Behind it, the dead break." }),
 };
 
 export const ITEM_IDS = Object.keys(ITEMS);

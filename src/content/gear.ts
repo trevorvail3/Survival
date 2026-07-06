@@ -21,9 +21,9 @@ export const ARMOR_SLOTS: ArmorSlot[] = ["head", "body", "hands", "legs", "feet"
 export function isArmorSlot(slot: string | undefined): slot is ArmorSlot {
   return !!slot && (ARMOR_SLOTS as string[]).includes(slot);
 }
-/** True for any equippable gear def — a weapon or a piece of armour. */
+/** True for any equippable gear def — a weapon, a shield, or a piece of armour. */
 export function isGearDef(def: ItemDef | undefined): boolean {
-  return !!def && (!!def.weapon || isArmorSlot(def.slot));
+  return !!def && (!!def.weapon || def.slot === "offhand" || isArmorSlot(def.slot));
 }
 
 export interface RarityMeta {
