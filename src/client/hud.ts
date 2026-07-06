@@ -51,7 +51,7 @@ export const HOTBAR: ItemId[] = ["poultice", "bread", "waterskin", "firebomb", "
 
 /** Human labels for equip slots (loadout + inspect cards). */
 const SLOT_LABEL: Record<string, string> = {
-  weapon: "Weapon", head: "Head", body: "Body", hands: "Hands", legs: "Legs", feet: "Feet",
+  weapon: "Weapon", offhand: "Off-hand", head: "Head", body: "Body", hands: "Hands", legs: "Legs", feet: "Feet",
 };
 
 /** Describe a weapon's feel from its stats: attack speed, reach, and any
@@ -434,7 +434,7 @@ export class Hud {
         ${p.points > 0 ? `<span style="font-size:11px;color:var(--amber);white-space:nowrap">+${p.points} pt${p.points > 1 ? "s" : ""}</span>` : ""}
       </div>` +
       `<div style="display:flex;align-items:center;gap:6px;margin-top:5px;font-size:12px">
-        <span style="color:var(--amber);font-family:'Cinzel',serif">◈ Power ${characterPower(p.equipped, ARMOR_SLOTS.map((s) => p.armor[s]))}</span>
+        <span style="color:var(--amber);font-family:'Cinzel',serif">◈ Power ${characterPower(p.equipped, [...ARMOR_SLOTS.map((s) => p.armor[s]), p.offhand])}</span>
         ${world.zoneId !== "home" ? `<span style="color:var(--ink-dim);font-size:11px">/ rec. ${this.content.regions.find((r) => r.id === world.zoneId)?.power ?? 0}</span>` : ""}
       </div>`;
 
@@ -639,7 +639,7 @@ export class Hud {
     }).join("");
 
     // Region pins.
-    const myPow = characterPower(world.player.equipped, ARMOR_SLOTS.map((s) => world.player.armor[s]));
+    const myPow = characterPower(world.player.equipped, [...ARMOR_SLOTS.map((s) => world.player.armor[s]), world.player.offhand]);
     const pins = this.content.regions.map((r) => {
       const px = r.mx * W, py = r.my * H;
       const here = world.zoneId === r.id;
@@ -720,7 +720,7 @@ export class Hud {
         <div style="font-size:10px;color:var(--ink-dim)">${label} · ◈${slotPower(slot)}</div></div>
       </div>`;
     };
-    const power = characterPower(p.equipped, ARMOR_SLOTS.map((sl) => p.armor[sl]));
+    const power = characterPower(p.equipped, [...ARMOR_SLOTS.map((sl) => p.armor[sl]), p.offhand]);
     const loadout =
       `<style>
         #hud-loadout{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px}
@@ -731,6 +731,7 @@ export class Hud {
       <div class="hud-heading">Loadout <span style="color:var(--amber);text-transform:none;letter-spacing:0">· ◈ Power ${power}</span></div>
        <div id="hud-loadout">
          ${loadoutCell(p.equipped, "Weapon")}
+         ${loadoutCell(p.offhand, "Off-hand")}
          ${ARMOR_SLOTS.map((sl) => loadoutCell(p.armor[sl], SLOT_LABEL[sl]!)).join("")}
        </div>`;
 

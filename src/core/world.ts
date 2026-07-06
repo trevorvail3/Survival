@@ -166,9 +166,10 @@ function isGearSlot(content: Content, s: InvSlot): boolean {
   return s.power !== undefined || isGearDef(def);
 }
 
-/** The equipped armour pieces as an ordered array (for Power / soak sums). */
+/** Every equipped soak-bearing piece — the five armour slots plus the off-hand
+ *  shield — as an ordered array (for Power average and mitigation sums). */
 function armorArray(p: Player): (InvSlot | null)[] {
-  return ARMOR_SLOTS.map((slot) => p.armor[slot]);
+  return [...ARMOR_SLOTS.map((slot) => p.armor[slot]), p.offhand];
 }
 
 /** Deposit a pack slot into the settlement stash. */
@@ -333,6 +334,7 @@ export function createWorld(content: Content, rng: () => number): World {
     order: { type: "none" },
     inv,
     equipped: { id: "rusty_sword", qty: 1 },
+    offhand: null,
     armor: { head: null, body: null, hands: null, legs: null, feet: null },
     nextAttack: 0,
     infection: 0,
@@ -682,7 +684,7 @@ let gearPoolCache: ItemId[] | null = null;
 function gearPool(content: Content): ItemId[] {
   if (!gearPoolCache) {
     gearPoolCache = Object.values(content.items)
-      .filter((i) => i.id !== "fists" && (isArmorSlot(i.slot) || (i.slot === "weapon" && !!i.weapon)))
+      .filter((i) => i.id !== "fists" && (isArmorSlot(i.slot) || i.slot === "offhand" || (i.slot === "weapon" && !!i.weapon)))
       .map((i) => i.id);
   }
   return gearPoolCache;
@@ -754,8 +756,7 @@ function attackPlayer(world: World, content: Content, e: Enemy, out: GameEvent[]
   // rarity + Power) plus perks; the region's Power gap scales incoming damage
   // (under-Power hurts). A full head-to-toe set soaks far more than one piece.
   let armorVal = 0;
-  for (const slot of ARMOR_SLOTS) {
-    const a = p.armor[slot];
+  for (const a of armorArray(p)) {
     const aDef = a ? content.items[a.id] : undefined;
     if (a && aDef) armorVal += armorSoak(aDef, a);
   }
@@ -937,14 +938,26 @@ export function useSlot(world: World, content: Content, slotIndex: number, out: 
       removeItem(p, slot.id, 1); out.push({ t: "cure" }); break;
     case "equip": {
       const armorSlot = isArmorSlot(def.slot) ? def.slot : null;
-      if (!armorSlot && !def.weapon) break;
-      const prev = armorSlot ? p.armor[armorSlot] : p.equipped;
+      const isOffhand = def.slot === "offhand";
+      const isWeapon = !!def.weapon;
+      if (!armorSlot && !isOffhand && !isWeapon) break;
       // Move the pack instance into the matching equip slot (gear is unique, qty 1).
       const inst: InvSlot = { id: slot.id, qty: 1 };
       if (slot.power !== undefined) inst.power = slot.power;
       if (slot.rarity !== undefined) inst.rarity = slot.rarity;
       p.inv[slotIndex] = null;
-      if (armorSlot) p.armor[armorSlot] = inst; else p.equipped = inst;
+      let prev: InvSlot | null;
+      if (armorSlot) { prev = p.armor[armorSlot]; p.armor[armorSlot] = inst; }
+      else if (isOffhand) {
+        prev = p.offhand; p.offhand = inst;
+        // A shield needs a free hand: a two-handed weapon can't be wielded with it.
+        const wDef = p.equipped ? content.items[p.equipped.id] : undefined;
+        if (wDef?.weapon?.twoHanded) { const w = p.equipped; p.equipped = null; if (w) placeInstance(world, w); out.push({ t: "log", msg: `You sling the ${wDef.name} to take up the ${def.name} — it needs a free hand.` }); }
+      } else {
+        prev = p.equipped; p.equipped = inst;
+        // Taking up a two-handed weapon frees the off-hand — stow any shield.
+        if (def.weapon?.twoHanded && p.offhand) { const sh = p.offhand; p.offhand = null; const shName = content.items[sh.id]?.name ?? "shield"; placeInstance(world, sh); out.push({ t: "log", msg: `The ${def.name} takes both hands — you stow your ${shName}.` }); }
+      }
       if (prev) placeInstance(world, prev); // return the old gear to the pack
       out.push({ t: "equip" });
       break;

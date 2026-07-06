@@ -50,6 +50,8 @@ export function loadGame(): { seed: number; world: World } | null {
       const old = armor && typeof armor === "object" && "id" in (armor as object) ? (armor as Record<string, unknown>) : null;
       pl["armor"] = { head: null, body: old, hands: null, legs: null, feet: null };
     }
+    // Off-hand (shield) slot added after armour slots.
+    if (!("offhand" in pl)) pl["offhand"] = null;
     const w = blob.world as unknown as Record<string, unknown>;
     if (typeof w["won"] !== "boolean") w["won"] = false;
     if (!Array.isArray(w["stash"])) w["stash"] = new Array(48).fill(null);

@@ -16,6 +16,13 @@ import { daylight, isNight } from "../core/world.ts";
 import { hashStr } from "../core/rng.ts";
 import { drawSurvivor, DEFAULT_LOOK, type AvatarAnim } from "./avatar.ts";
 import { itemIconSVG } from "./itemIcon.ts";
+import { RARITY_META, rarityOf } from "../content/gear.ts";
+
+/** "#rrggbb" → "r,g,b" for rgba() glow strings. */
+function rgbTriplet(hex: string): string {
+  const h = hex.replace("#", "");
+  return `${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)}`;
+}
 
 export const TILE = 30;
 
@@ -460,11 +467,32 @@ function drawEnemy(g: CanvasRenderingContext2D, e: Enemy, now: number): void {
 
 function drawGround(g: CanvasRenderingContext2D, gi: GroundItem, now: number): void {
   const cx = gi.pos.x * TILE, cy = gi.pos.y * TILE;
-  const pulse = 0.6 + Math.sin(now / 300 + gi.id) * 0.2;
-  const glow = discSprite("loot", 24, [[0, "rgba(220,180,90,0.5)"], [1, "rgba(220,180,90,0)"]]);
-  g.globalAlpha = pulse; g.drawImage(glow, cx - 12, cy - 12, 24, 24); g.globalAlpha = 1;
-  g.fillStyle = "#d8b45a"; g.strokeStyle = "#2a2015"; g.lineWidth = 1;
-  g.beginPath(); g.moveTo(cx, cy - 4); g.lineTo(cx + 4, cy); g.lineTo(cx, cy + 4); g.lineTo(cx - 4, cy); g.closePath(); g.fill(); g.stroke();
+  // Gear + coffer instances glow in their rarity colour; legendary burns
+  // gold-orange with a brighter, faster corona. Plain resources keep the amber.
+  const rar = gi.item.rarity ? rarityOf(gi.item) : null;
+  const legendary = rar === "legendary";
+  const baseCol = rar ? RARITY_META[rar].color : "#d8b45a";
+  const trip = rgbTriplet(baseCol);
+  const pulse = (0.6 + Math.sin(now / 300 + gi.id) * 0.2) * (legendary ? 1.3 : 1);
+  const gr = legendary ? 34 : rar ? 28 : 24;
+  const glow = discSprite(`loot_${baseCol}`, gr, [[0, `rgba(${trip},${legendary ? 0.75 : 0.5})`], [1, `rgba(${trip},0)`]]);
+  g.globalAlpha = Math.min(1, pulse); g.drawImage(glow, cx - gr / 2, cy - gr / 2, gr, gr); g.globalAlpha = 1;
+  if (legendary) {
+    // An extra molten gold-orange corona, breathing faster than the base glow.
+    const cr = gr + 10;
+    const corona = discSprite("loot_leg_corona", cr, [[0, "rgba(255,168,54,0.4)"], [0.6, "rgba(255,120,30,0.14)"], [1, "rgba(255,120,30,0)"]]);
+    g.globalAlpha = 0.5 + Math.sin(now / 170 + gi.id) * 0.3; g.drawImage(corona, cx - cr / 2, cy - cr / 2, cr, cr); g.globalAlpha = 1;
+  }
+  if (gi.item.id === "coffer") {
+    // A little sealed strongbox, banded in its rarity colour.
+    g.fillStyle = "#3a2c1c"; g.strokeStyle = "#1c140c"; g.lineWidth = 1;
+    rr(g, cx - 5.5, cy - 3.5, 11, 8, 2); g.fill(); g.stroke();
+    g.fillStyle = baseCol; g.fillRect(cx - 5.5, cy - 0.5, 11, 1.8); // band
+    g.fillStyle = legendary ? "#ffd27a" : baseCol; g.fillRect(cx - 1, cy - 1.2, 2, 3.4); // lock
+  } else {
+    g.fillStyle = baseCol; g.strokeStyle = "#2a2015"; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(cx, cy - 4); g.lineTo(cx + 4, cy); g.lineTo(cx, cy + 4); g.lineTo(cx - 4, cy); g.closePath(); g.fill(); g.stroke();
+  }
 }
 
 // Which role a settler figure shows, by index against the assigned counts.

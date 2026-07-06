@@ -109,11 +109,13 @@ export interface WeaponDef {
   crit?: number;
   /** This weapon cleaves nearby foes on every swing (great weapons, polearms). */
   cleave?: boolean;
+  /** Needs both hands — cannot be paired with an off-hand shield. */
+  twoHanded?: boolean;
 }
 
-/** Equipment slots. One weapon (main hand) + five armour slots. */
+/** Equipment slots: main-hand weapon, an off-hand (shield), and five armour slots. */
 export type ArmorSlot = "head" | "body" | "hands" | "legs" | "feet";
-export type EquipSlot = "weapon" | ArmorSlot;
+export type EquipSlot = "weapon" | "offhand" | ArmorSlot;
 
 export interface InvSlot {
   id: ItemId;
@@ -242,6 +244,8 @@ export interface Player {
   order: PlayerOrder;
   inv: (InvSlot | null)[]; // the pack you carry (lost if you fall)
   equipped: InvSlot | null; // equipped weapon instance (rolled Power/rarity)
+  /** Equipped off-hand (a shield). Locked out while a two-handed weapon is wielded. */
+  offhand: InvSlot | null;
   /** Equipped armour, one instance per slot (head/body/hands/legs/feet). */
   armor: Record<ArmorSlot, InvSlot | null>;
   nextAttack: number;

@@ -129,6 +129,8 @@ function draw(shape: string, p: Pal, id: string): string {
       return `<path d="M11,4 Q20,4 20,10 L19,20 Q19,26 15,28 L11,28 Q13,22 12,16 Q11,10 11,4 Z" fill="${p.base}" stroke="${p.edge}" stroke-width="1.1" stroke-linejoin="round"/><path d="M13,8 Q17,9 18,13 M12,15 Q16,16 18,19" stroke="${p.light}" stroke-width="0.9" fill="none" opacity="0.5"/>`;
     case "boots":
       return `<path d="M11,4 L18,4 L18,18 L26,18 Q28,18 28,22 L28,26 L9,26 L9,8 Q9,4 11,4 Z" fill="${p.base}" stroke="${p.edge}" stroke-width="1.1" stroke-linejoin="round"/><rect x="9" y="24" width="19" height="2.6" fill="${p.dark}"/><path d="M12,10 H16 M12,14 H16" stroke="${p.dark}" stroke-width="0.8" opacity="0.6"/>`;
+    case "shield":
+      return `<path d="M16,3 L27,7 Q27,20 16,29 Q5,20 5,7 Z" fill="${p.base}" stroke="${p.edge}" stroke-width="1.3" stroke-linejoin="round"/><path d="M16,5 L24,8 Q24,18 16,25 Z" fill="${p.dark}" opacity="0.45"/><path d="M16,3 V29 M6,10 H26" stroke="${p.light}" stroke-width="1" opacity="0.5"/><circle cx="16" cy="13" r="2.2" fill="${p.accent}"/>`;
     default:
       return `<circle cx="16" cy="16" r="9" fill="${p.base}" stroke="${p.edge}" stroke-width="1.4"/><circle cx="13" cy="13" r="3" fill="${p.light}" opacity="0.6"/>`;
   }
