@@ -18,8 +18,8 @@ import { Hud, type HudHandlers } from "./client/hud.ts";
 import { Input } from "./client/input.ts";
 import { Fx } from "./client/fx.ts";
 import { audio } from "./client/audio.ts";
-import { loadGame, clearSave, slotInfos, migrateLegacySave, setAccount, setActiveAccount, SAVE_SLOTS, saveGame } from "./client/save.ts";
-import { initAccount, available as accountAvailable, currentAccount, signIn, signUp, signOut, type Account } from "./client/account.ts";
+import { loadGame, clearSave, slotInfos, migrateLegacySave, setAccount, setActiveAccount, SAVE_SLOTS, saveGame, setCloudHook, parseBlob, cacheBlob, summarize, type SlotInfo } from "./client/save.ts";
+import { initAccount, available as accountAvailable, currentAccount, signIn, signUp, signOut, cloudList, cloudSave, cloudDelete, type Account } from "./client/account.ts";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement | null;
 const hudRoot = document.getElementById("hud") as HTMLElement | null;
@@ -158,16 +158,37 @@ function showSignIn(): void {
   };
   stageEl.querySelector<HTMLButtonElement>("#authSignin")!.onclick = () => doAuth(false);
   stageEl.querySelector<HTMLButtonElement>("#authSignup")!.onclick = () => doAuth(true);
-  stageEl.querySelector<HTMLButtonElement>("#authGuest")!.onclick = () => { account = null; setActiveAccount(null); renderAccount(); showSlots(); };
+  stageEl.querySelector<HTMLButtonElement>("#authGuest")!.onclick = () => { account = null; setActiveAccount(null); setCloudHook(null); renderAccount(); showSlots(slotInfos()); };
   pass.onkeydown = (ev) => { if (ev.key === "Enter") doAuth(false); };
 }
 
+let lastCloud = 0;
 function enterAccount(acc: Account): void {
   account = acc;
   setActiveAccount(acc.id);
   setAccount(acc.email);
+  // Mirror every local save up to the cloud (leading-edge throttled so a 4s
+  // autosave cadence becomes a ~20s cloud cadence). Local stays authoritative.
+  setCloudHook((slot, blob) => {
+    const now = Date.now();
+    if (now - lastCloud < 20000) return;
+    lastCloud = now;
+    void cloudSave(slot, blob);
+  });
   renderAccount();
-  showSlots();
+  void refreshSlots();
+}
+
+/** Pull the account's slots from the cloud (mirroring them locally so they're
+ *  playable offline); fall back to the local slots if the cloud is unreachable
+ *  or the table isn't provisioned yet. */
+async function refreshSlots(): Promise<void> {
+  let infos: (SlotInfo | null)[] | null = null;
+  if (account) {
+    const cloud = await cloudList();
+    if (cloud) infos = cloud.map((raw, i) => { const b = parseBlob(raw); if (b) cacheBlob(i, b); return summarize(b, i); });
+  }
+  showSlots(infos ?? slotInfos());
 }
 
 // --- Character slots (per account / guest). ---
@@ -184,8 +205,7 @@ function continueSlot(slot: number): void {
   dismiss();
   begin(s.world, s.seed, slot, s.name);
 }
-function showSlots(): void {
-  const infos = slotInfos();
+function showSlots(infos: (SlotInfo | null)[]): void {
   stageEl.innerHTML = `<div class="char-head">Choose your Warden</div><div class="char-slots">${
     infos.map((info, i) => info
       ? `<div class="cslot filled" data-continue="${i}">
@@ -204,7 +224,7 @@ function showSlots(): void {
     el.onclick = (e) => { if ((e.target as HTMLElement).dataset["del"]) return; continueSlot(Number(el.dataset["continue"])); };
   });
   stageEl.querySelectorAll<HTMLButtonElement>("[data-del]").forEach((el) => {
-    el.onclick = (e) => { e.stopPropagation(); const i = Number(el.dataset["del"]); if (window.confirm("Permanently delete this warden? This cannot be undone.")) { clearSave(i); showSlots(); } };
+    el.onclick = (e) => { e.stopPropagation(); const i = Number(el.dataset["del"]); if (window.confirm("Permanently delete this warden? This cannot be undone.")) { clearSave(i); if (account) void cloudDelete(i); void refreshSlots(); } };
   });
   stageEl.querySelectorAll<HTMLElement>("[data-new]").forEach((el) => {
     el.onclick = () => openNewForm(Number(el.dataset["new"]), el);
@@ -231,7 +251,8 @@ async function boot(): Promise<void> {
     if (existing) { enterAccount(existing); return; }
     showSignIn();
   } else {
-    showSlots(); // offline / guest
+    setCloudHook(null);
+    showSlots(slotInfos()); // offline / guest
   }
 }
 void boot();
