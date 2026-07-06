@@ -37,7 +37,7 @@ import { computeMods, nodeUnlocked, SKILLS, xpForNext } from "../content/skills.
 import type { Mods } from "../content/skills.ts";
 import { levelForXp, SKILL_META } from "../content/trainskills.ts";
 import type { SkillId } from "../content/trainskills.ts";
-import { weaponDamage, armorSoak, characterPower, rollRarity, rollPower, type Rarity } from "../content/gear.ts";
+import { weaponDamage, armorSoak, characterPower, rollRarity, rollPower, rarityOf, RARITIES, type Rarity } from "../content/gear.ts";
 
 export const PLAYER_RADIUS = 0.34;
 export const INV_COLS = 6;
@@ -81,6 +81,7 @@ export type GameEvent =
   | { t: "levelUp"; level: number }
   | { t: "skillup"; skill: string; level: number }
   | { t: "drop"; id: ItemId; rarity: string; power: number }
+  | { t: "salvage"; id: ItemId; qty: number }
   | { t: "victory" }
   | { t: "heal" }
   | { t: "eat" }
@@ -633,7 +634,7 @@ function damageEnemy(world: World, content: Content, ctx: { rng: () => number },
     const table = e.boss ? `kill_${e.kind}` : e.kind === "revenant" ? "kill_revenant" : "kill_common";
     for (const d of rollLoot(ctx.rng, table)) spawnGround(world, d.id, d.qty, e.pos.x, e.pos.y);
     // Destiny-style gear: bosses always drop, tougher foes sometimes.
-    const gearDrops = e.boss ? 2 : ctx.rng() < 0.04 + content.enemies[e.kind].bounty * 0.012 ? 1 : 0;
+    const gearDrops = e.boss ? 2 : ctx.rng() < 0.105 + content.enemies[e.kind].bounty * 0.006 ? 1 : 0;
     for (let i = 0; i < gearDrops; i++) spawnGearDrop(world, content, ctx, e.pos.x, e.pos.y, out);
     if (e.boss) {
       if (!world.bossesSlain.includes(e.kind)) world.bossesSlain.push(e.kind);
@@ -813,6 +814,32 @@ export function restAtHearth(world: World, content: Content, rng: () => number, 
 // ---------------------------------------------------------------------------
 // Using items
 // ---------------------------------------------------------------------------
+
+/** What a gear instance breaks down into, and how much. You get MORE at base
+ *  (proper tools) than in the field — so hauling gear home is worth the risk. */
+export function dismantleYield(content: Content, slot: InvSlot, atHome: boolean): { id: ItemId; qty: number } {
+  const mat = content.items[slot.id]?.material;
+  const id: ItemId = mat === "wood" ? "wood" : mat === "leather" || mat === "cloth" ? "leather" : "iron";
+  const power = slot.power ?? 4;
+  const rar = RARITIES.indexOf(rarityOf(slot));
+  const base = 1 + Math.floor(power / 8) + rar;
+  return { id, qty: Math.max(1, base * (atHome ? 2 : 1)) };
+}
+
+/** Break a gear item down into salvage. Only gear can be dismantled. */
+export function dismantle(world: World, content: Content, slotIndex: number, out: GameEvent[]): boolean {
+  const p = world.player;
+  const slot = p.inv[slotIndex];
+  if (!slot) return false;
+  const def = content.items[slot.id];
+  if (!def || !(def.slot === "body" || def.weapon)) return false; // gear only
+  const yld = dismantleYield(content, slot, world.zoneId === "home");
+  p.inv[slotIndex] = null;
+  const left = addItem(p, content, yld.id, yld.qty);
+  if (left > 0) spawnGround(world, yld.id, left, p.pos.x, p.pos.y);
+  out.push({ t: "salvage", id: yld.id, qty: yld.qty });
+  return true;
+}
 
 /** Put a unique gear instance into the first empty pack slot, else drop it. */
 function placeInstance(world: World, inst: InvSlot): void {

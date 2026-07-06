@@ -1,12 +1,14 @@
 # Publishes Ashfall to GitHub Pages so there's a live URL to play.
 # One-time setup: repo Settings → Pages → Source: "GitHub Actions".
-# Then every push to this branch (or main) redeploys; the URL is shown in the
-# Actions run summary (typically https://<user>.github.io/<repo>/).
+# Runs ONLY on main: the github-pages environment rejects deploys from other
+# branches, and a second branch's run cancels main's (shared concurrency group)
+# — either way Pages never publishes. Merge to main to deploy; the URL is in the
+# run summary (https://<user>.github.io/<repo>/).
 name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: ["main", "claude/new-survival-game-setup-0d27xa"]
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:

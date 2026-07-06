@@ -33,6 +33,7 @@ export interface HudHandlers {
   onHotbar: (itemId: ItemId) => void;
   onTogglePack: () => void;
   onToggleSkills: () => void;
+  onDismantle: (slotIndex: number) => void;
 }
 
 /** True on touch-primary devices (phones/tablets), where we surface on-screen
@@ -463,8 +464,9 @@ export class Hud {
       const gear = !!(def.weapon || def.slot === "body");
       const col = gear ? RARITY_META[rarityOf(s)].color : "#26282a";
       const pw = gear ? `<span class="e" style="color:${col}">◈${slotPower(s)}</span>` : "";
+      const salv = gear ? `<button class="salv" data-salv="${i}" title="Salvage for parts (more at base)">⊟</button>` : "";
       return `<div class="slot" data-slot="${i}" title="${gearTip(def, s)}" style="border-color:${col}">
-        <div class="ic">${itemIconSVG(def)}</div>${s.qty > 1 ? `<span class="q">${s.qty}</span>` : ""}${pw}
+        <div class="ic">${itemIconSVG(def)}</div>${s.qty > 1 ? `<span class="q">${s.qty}</span>` : ""}${pw}${salv}
       </div>`;
     }).join("");
 
@@ -506,16 +508,21 @@ export class Hud {
         .slot{aspect-ratio:1;background:#101112;border:1px solid #26282a;border-radius:3px;position:relative;cursor:pointer}
         .slot.empty{opacity:.4;cursor:default}.slot .ic{width:100%;height:100%;padding:3px}
         .slot .q{position:absolute;bottom:1px;right:3px;font-size:11px}.slot .e{position:absolute;top:1px;right:3px;font-size:11px;color:var(--amber)}
+        .slot .salv{position:absolute;bottom:1px;left:1px;width:15px;height:15px;padding:0;font-size:11px;line-height:1;border:1px solid #3a3d40;border-radius:3px;background:#17191a;color:#9aa09b;cursor:pointer}
+        .slot .salv:hover{border-color:var(--rust);color:#fff}
         .recipe{display:flex;align-items:center;gap:10px;padding:6px;border-bottom:1px solid #1c1e20}
       </style>
       ${loadout}
       <div class="hud-heading">The Pack</div>
       <div id="hud-pack-grid">${slots}</div>
       <div class="hud-heading">Craft</div>${recipes}
-      <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--ink-dim)">[Tab] close · click a weapon or armour to equip · click an item to use</div>`;
+      <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--ink-dim)">[Tab] close · click gear to equip, ⊟ to salvage (more at base) · click an item to use</div>`;
 
     this.pack.querySelectorAll<HTMLElement>(".slot[data-slot]").forEach((el) => {
       el.onclick = () => this.handlers.onUseSlot(Number(el.dataset["slot"])); // useSlot equips gear, uses consumables
+    });
+    this.pack.querySelectorAll<HTMLElement>(".salv[data-salv]").forEach((el) => {
+      el.onclick = (ev) => { ev.stopPropagation(); this.handlers.onDismantle(Number(el.dataset["salv"])); };
     });
     this.pack.querySelectorAll<HTMLElement>(".recipe").forEach((el) => {
       const btn = el.querySelector("button");

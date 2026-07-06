@@ -46,6 +46,7 @@ const handlers: HudHandlers = {
   onHotbar: (id) => gameHandlers?.onHotbar(id),
   onTogglePack: () => gameHandlers?.onTogglePack(),
   onToggleSkills: () => gameHandlers?.onToggleSkills(),
+  onDismantle: (i) => gameHandlers?.onDismantle(i),
 };
 const hud = new Hud(hudRoot, content, handlers);
 
