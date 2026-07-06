@@ -15,7 +15,7 @@ import { itemIconSVG } from "./itemIcon.ts";
 import { canBuild, canCraft, canSpendSkill, capacity, dismantleYield, idleSettlers, INV_COLS } from "../core/world.ts";
 import { SKILLS, TREE_NAMES, pointsInTree, xpForNext, nodeUnlocked, type SkillTree } from "../content/skills.ts";
 import { SKILL_META, SKILL_GROUPS, SKILL_IDS, MAX_SKILL, levelForXp, levelProgress, type SkillId } from "../content/trainskills.ts";
-import { RARITY_META, rarityOf, slotPower, characterPower, weaponDamage, armorSoak, isGearDef, ARMOR_SLOTS } from "../content/gear.ts";
+import { RARITY_META, rarityOf, slotPower, characterPower, weaponDamage, armorSoak, isGearDef, ARMOR_SLOTS, TOOL_SKILLS } from "../content/gear.ts";
 import { drawMinimap } from "./render.ts";
 import { audio } from "./audio.ts";
 
@@ -673,11 +673,14 @@ export class Hud {
     const loadoutCell = (slot: InvSlot | null, label: string): string => {
       if (!slot) return `<div class="ld empty" title="${label}: empty"><div class="ldslot">${label}</div><div style="color:var(--ink-dim);font-size:11px">— empty —</div></div>`;
       const def = this.content.items[slot.id]!;
-      const col = RARITY_META[rarityOf(slot)].color;
+      // Gear (weapon/armour/shield) shows rarity colour + Power; tools don't.
+      const gear = isGearDef(def);
+      const col = gear ? RARITY_META[rarityOf(slot)].color : "#2a2c2e";
+      const sub = gear ? `${label} · ◈${slotPower(slot)}` : label;
       return `<div class="ld" title="${gearTip(def, slot)}" style="border-color:${col}">
         <div style="width:26px;height:26px;flex:none">${itemIconSVG(def)}</div>
-        <div style="min-width:0"><div style="color:${col};font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${def.name}</div>
-        <div style="font-size:10px;color:var(--ink-dim)">${label} · ◈${slotPower(slot)}</div></div>
+        <div style="min-width:0"><div style="color:${gear ? col : "var(--ink)"};font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${def.name}</div>
+        <div style="font-size:10px;color:var(--ink-dim)">${sub}</div></div>
       </div>`;
     };
     const power = characterPower(p.equipped, [...ARMOR_SLOTS.map((sl) => p.armor[sl]), p.offhand]);
@@ -693,6 +696,14 @@ export class Hud {
          ${loadoutCell(p.equipped, "Weapon")}
          ${loadoutCell(p.offhand, "Off-hand")}
          ${ARMOR_SLOTS.map((sl) => loadoutCell(p.armor[sl], SLOT_LABEL[sl]!)).join("")}
+       </div>`;
+
+    // Tool belt — gathering tools, always to hand (not in the pack grid).
+    const toolLabel: Record<string, string> = { woodcutting: "Axe", mining: "Pickaxe", fishing: "Rod" };
+    const toolbelt =
+      `<div class="hud-heading">Tool Belt</div>
+       <div id="hud-loadout" style="grid-template-columns:repeat(3,1fr)">
+         ${TOOL_SKILLS.map((sk) => loadoutCell(p.tools[sk] ?? null, toolLabel[sk]!)).join("")}
        </div>`;
 
     const s = world.settlement.structures;
@@ -725,6 +736,7 @@ export class Hud {
         .recipe{display:flex;align-items:center;gap:10px;padding:6px;border-bottom:1px solid #1c1e20}
       </style>
       ${loadout}
+      ${toolbelt}
       <div class="hud-heading">The Pack</div>
       <div id="hud-pack-grid">${slots}</div>
       <div class="hud-heading">Craft</div>${recipes}

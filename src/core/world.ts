@@ -335,6 +335,9 @@ export function createWorld(content: Content, rng: () => number): World {
     equipped: { id: "rusty_sword", qty: 1 },
     offhand: null,
     armor: { head: null, body: null, hands: null, legs: null, feet: null },
+    // Tool belt starts stocked so gathering works from turn one; tools live
+    // here, always to hand, never cluttering the pack.
+    tools: { woodcutting: { id: "felling_axe", qty: 1 }, mining: { id: "pickaxe", qty: 1 }, fishing: { id: "fishing_rod", qty: 1 } },
     nextAttack: 0,
     infection: 0,
     alive: true,
@@ -346,10 +349,6 @@ export function createWorld(content: Content, rng: () => number): World {
     trained: {},
   };
   addItem(player, content, "rusty_sword", 1);
-  // Starting tools so gathering is an activity from turn one, not a wall.
-  addItem(player, content, "felling_axe", 1);
-  addItem(player, content, "pickaxe", 1);
-  addItem(player, content, "fishing_rod", 1);
   addItem(player, content, "poultice", 2);
   addItem(player, content, "bread", 1);
   addItem(player, content, "waterskin", 1);
@@ -819,9 +818,12 @@ function resolveInteract(world: World, content: Content, ctx: { rng: () => numbe
       out.push({ t: "log", msg: `This lode needs ${SKILL_META[nodeSkill].name} ${pr.reqLevel} to work.` });
       return;
     }
+    // Hard tool gate: chopping/mining/fishing need the matching tool in your
+    // belt (herbs are picked bare-handed). The belt is normally stocked, so this
+    // only bites if a tool slot is somehow empty.
     const hasTool = hasToolFor(world, content, nodeSkill);
-    if (nodeSkill === "fishing" && !hasTool) {
-      out.push({ t: "log", msg: "You need a fishing rod to fish here." });
+    if (TOOL_NEED_MSG[nodeSkill] && !hasTool) {
+      out.push({ t: "log", msg: TOOL_NEED_MSG[nodeSkill]! });
       return;
     }
     const drops = rollLoot(ctx.rng, pr.loot ?? pr.kind);
@@ -856,12 +858,16 @@ function resolveInteract(world: World, content: Content, ctx: { rng: () => numbe
 
 const GATHER_BASE_MS = 1150;
 
-/** True if the pack holds a tool serving this gathering skill. */
-function hasToolFor(world: World, content: Content, skill: string): boolean {
-  for (const s of world.player.inv) {
-    if (s && content.items[s.id]?.tool === skill) return true;
-  }
-  return false;
+/** Tool a gathering skill requires (absent = bare-handed, e.g. herblore). */
+const TOOL_NEED_MSG: Record<string, string> = {
+  woodcutting: "You need an axe in your tool belt to fell this.",
+  mining: "You need a pickaxe in your tool belt to mine this.",
+  fishing: "You need a fishing rod in your tool belt to fish here.",
+};
+
+/** True if the tool belt holds a tool serving this gathering skill. */
+function hasToolFor(world: World, _content: Content, skill: string): boolean {
+  return !!world.player.tools[skill];
 }
 
 /** Advance an in-progress gather: dispense one unit per swing on its timer,
@@ -966,6 +972,16 @@ export function useSlot(world: World, content: Content, slotIndex: number, out: 
   if (!slot) return;
   const def = content.items[slot.id];
   if (!def) return;
+  // A gathering tool clicked in the pack slots into its tool-belt slot (any
+  // tool already there returns to the pack). Tools carry no use verb otherwise.
+  if (def.tool) {
+    const prev = p.tools[def.tool] ?? null;
+    p.tools[def.tool] = { id: slot.id, qty: 1 };
+    p.inv[slotIndex] = null;
+    if (prev) placeInstance(world, prev);
+    out.push({ t: "equip" });
+    return;
+  }
   const heal = playerMods(p).healMult; // Field Medic
   switch (def.use) {
     case "heal": p.hp = Math.min(p.maxHp, p.hp + (def.heal ?? 0) * heal); removeItem(p, slot.id, 1); out.push({ t: "heal" }); break;

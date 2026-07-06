@@ -26,6 +26,9 @@ export function isGearDef(def: ItemDef | undefined): boolean {
   return !!def && (!!def.weapon || def.slot === "offhand" || isArmorSlot(def.slot));
 }
 
+/** The gathering-skill slots of the tool belt, in display order. */
+export const TOOL_SKILLS = ["woodcutting", "mining", "fishing"] as const;
+
 export interface RarityMeta {
   name: string;
   color: string;
