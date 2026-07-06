@@ -1,8 +1,9 @@
 /**
  * src/core/types.ts
  * -----------------
- * The shared vocabulary of Ashfall — a medieval plague-horror survival game.
- * Only *shapes* live here (no logic, no DOM).
+ * The shared vocabulary of Ashfall — a cozy base-builder with OSRS-style
+ * gathering/crafting and Destiny/Arc-Raiders-style expedition loot runs, set in
+ * a dark medieval-plague world. Only *shapes* live here (no logic, no DOM).
  *
  * Discipline borrowed from the sibling `world` project: time + randomness are
  * injected via `Ctx`, never read from globals, so the simulation is
@@ -70,7 +71,7 @@ export interface GameMap {
 
 export type ItemId = string;
 
-export type ItemUse = "heal" | "food" | "drink" | "throw" | "equip" | "cure" | "none";
+export type ItemUse = "heal" | "throw" | "equip" | "cure" | "none";
 
 export interface ItemDef {
   id: ItemId;
@@ -83,8 +84,6 @@ export interface ItemDef {
   armor?: number; // damage soaked per hit when equipped as armour
   slot?: "weapon" | "body"; // equip slot
   heal?: number;
-  food?: number;
-  drink?: number;
   cure?: number; // infection removed
   throwDamage?: number;
   throwRadius?: number;
@@ -228,8 +227,6 @@ export interface Player {
   facing: number;
   hp: number;
   maxHp: number;
-  hunger: number;
-  thirst: number;
   /** Tiles remaining to walk (drives movement + facing). */
   path: Vec2[];
   order: PlayerOrder;

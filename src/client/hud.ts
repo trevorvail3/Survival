@@ -1,7 +1,7 @@
 /**
  * src/client/hud.ts
  * -----------------
- * The HUD: vitals (health / hunger / thirst / infection), a day-night clock and
+ * The HUD: vitals (health / infection), a day-night clock and
  * settler count, a consumable hotbar, the message log, and two modal panels —
  * the Pack (inventory + crafting, gated by your Forge/Workshop) and the
  * Settlement board (raise and upgrade structures). DOM over canvas; all icons
@@ -45,7 +45,7 @@ const TOUCH: boolean =
 const ROLE_INFO: Record<SettlerRole, { name: string; glyph: string; effect: string }> = {
   gatherer: { name: "Gatherer", glyph: "anvil", effect: "Timber, stone & ore each dawn" },
   forager: { name: "Forager", glyph: "meat", effect: "Food & physic each dawn" },
-  guard: { name: "Guard", glyph: "shield", effect: "Holds the wall — thins night raids" },
+  guard: { name: "Guard", glyph: "shield", effect: "Works the quarry — ore & stone each dawn" },
 };
 
 export const HOTBAR: ItemId[] = ["poultice", "bread", "waterskin", "firebomb", "antidote"];
@@ -229,8 +229,6 @@ export class Hud {
     } else {
       head = `<span style="font-family:'Cinzel',serif">${def.name}</span>`;
       if (def.heal) stat.push(`Heals ${def.heal}`);
-      if (def.food) stat.push(`Food +${def.food}`);
-      if (def.drink) stat.push(`Water +${def.drink}`);
       if (def.cure) stat.push(`Cures ${def.cure} rot`);
       if (def.throwDamage) stat.push(`Throw ${def.throwDamage} dmg`);
     }
@@ -310,8 +308,6 @@ export class Hud {
     this.vitals.innerHTML =
       `<div class="hud-heading">Vitals</div>` +
       this.bar("heart", p.hp, p.maxHp, "#c23b2c") +
-      this.bar("meat", p.hunger, 100, "#9a6a3c") +
-      this.bar("drop", p.thirst, 100, "#3f6d8c") +
       (p.infection > 0 ? this.bar("biohazard", p.infection, 100, "#7f9a3c") : "") +
       `<div style="display:flex;align-items:center;gap:8px;margin-top:6px;border-top:1px solid #1c1e20;padding-top:6px">
         <span style="font-family:'Cinzel',serif;font-size:12px;color:var(--amber);white-space:nowrap">Lv ${p.level}</span>

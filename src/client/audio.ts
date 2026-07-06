@@ -14,8 +14,8 @@
 
 export type Sfx =
   | "melee" | "hit" | "crit" | "bowshot" | "dryfire" | "throw" | "explode"
-  | "pickup" | "craft" | "build" | "recruit" | "gather" | "heal" | "eat"
-  | "drink" | "search" | "equip" | "click" | "hurt" | "death"
+  | "pickup" | "craft" | "build" | "recruit" | "gather" | "heal"
+  | "search" | "equip" | "click" | "hurt" | "death"
   | "nightfall" | "daybreak" | "lowhp" | "levelup" | "dodge";
 
 export type CreatureVoice = "risen" | "hound" | "wretch" | "revenant" | "graveking" | "prior" | "rotmother";
@@ -297,14 +297,6 @@ class AudioManager {
         case "heal":
           this.note({ f: 300, dur: 0.5, peak: 0.12, type: "sine", attack: 0.05, wet: true });
           this.note({ f: 400, dur: 0.5, peak: 0.1, type: "sine", attack: 0.08, wet: true, delay: 0.06 });
-          break;
-        case "eat":
-          this.noise({ dur: 0.18, peak: 0.16, lp: 1400 });
-          this.noise({ dur: 0.16, peak: 0.14, lp: 1400, delay: 0.2 });
-          break;
-        case "drink":
-          this.tone({ f0: 700, f1: 500, dur: 0.1, peak: 0.1, type: "sine" });
-          this.tone({ f0: 620, f1: 440, dur: 0.1, peak: 0.1, type: "sine", delay: 0.14 });
           break;
         case "search":
           this.noise({ dur: 0.3, peak: 0.14, hp: 400, lp: 2600 });

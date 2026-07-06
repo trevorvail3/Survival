@@ -1,7 +1,7 @@
 {
   "name": "ashfall",
   "version": "0.1.0",
-  "description": "Ashfall - a dark, top-down survival-horror crafting game. No image or audio assets: everything is generated in code.",
+  "description": "Ashfall - a cozy base-building game with OSRS-style gathering/crafting and a Destiny/Arc-Raiders-style expedition loot chase. No image or audio assets: everything is generated in code.",
   "private": true,
   "type": "module",
   "scripts": {

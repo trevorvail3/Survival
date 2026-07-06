@@ -25,12 +25,12 @@ export const ITEMS: Record<ItemId, ItemDef> = {
 
   // --- Food chain (Fishing -> Cooking) ---
   raw_fish: def({ id: "raw_fish", name: "Raw Fish", shape: "fish", material: "fish", stack: 20, use: "none", desc: "Cold and slick. Cook it before you trust it to your gut." }),
-  cooked_fish: def({ id: "cooked_fish", name: "Cooked Fish", shape: "fish", material: "cooked", stack: 20, use: "food", food: 40, heal: 12, desc: "Charred over the hearth. Fills the belly and mends a little." }),
+  cooked_fish: def({ id: "cooked_fish", name: "Cooked Fish", shape: "fish", material: "cooked", stack: 20, use: "heal", heal: 22, desc: "Charred over the hearth. A good field meal — mends a little." }),
 
   // --- Consumables ---
   poultice: def({ id: "poultice", name: "Poultice", shape: "poultice", material: "herb", stack: 15, use: "heal", heal: 40, desc: "Herb and linen packed to a wound. Closes it." }),
-  bread: def({ id: "bread", name: "Black Bread", shape: "bread", material: "bread", stack: 15, use: "food", food: 45, desc: "Hard, dark, filling. A day's ration." }),
-  waterskin: def({ id: "waterskin", name: "Waterskin", shape: "waterskin", material: "leather", stack: 10, use: "drink", drink: 45, desc: "Boiled clean. Worth more than iron some days." }),
+  bread: def({ id: "bread", name: "Black Bread", shape: "bread", material: "bread", stack: 15, use: "heal", heal: 20, desc: "Hard, dark, filling. A welcome bite on a long expedition." }),
+  waterskin: def({ id: "waterskin", name: "Waterskin", shape: "waterskin", material: "leather", stack: 10, use: "cure", cure: 20, desc: "Boiled clean. A swallow eases the fever in your blood." }),
   antidote: def({ id: "antidote", name: "Antidote", shape: "vial", material: "toxic", stack: 10, use: "cure", cure: 60, heal: 8, desc: "A feverfew brew that beats the plague back." }),
   firebomb: def({ id: "firebomb", name: "Firepot", shape: "firebomb", material: "glass", stack: 8, use: "throw", throwDamage: 55, throwRadius: 2.2, fire: true, desc: "A sealed pot of oil and flame. The dead fear fire." }),
 

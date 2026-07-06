@@ -1,10 +1,10 @@
 /**
  * src/content/settlement.ts
  * -------------------------
- * The buildable heart of the game: your settlement's structures. Each is raised
- * and upgraded with gathered materials and pays off in survival — the Forge and
- * Workshop unlock better arms and armour, the Palisade thins the night's
- * attackers, and Quarters house the survivors you rescue.
+ * The buildable heart of the game: your castle's structures. Each is raised and
+ * upgraded with gathered materials — the Forge and Workshop unlock better arms
+ * and armour, the Palisade reclaims more of the bailey to house survivors, and
+ * Quarters house the ones you rescue.
  */
 
 import type { StructureDef, StructureId } from "../core/types.ts";
@@ -14,13 +14,13 @@ export const STRUCTURES: Record<StructureId, StructureDef> = {
     id: "palisade",
     name: "Palisade",
     maxLevel: 3,
-    blurb: "Sharpened stakes and stone. Fewer dead breach the walls at night.",
+    blurb: "Sharpened stakes and cleared stone. Reclaims more of the ruined bailey to live in.",
     costs: [
       [{ id: "wood", qty: 10 }, { id: "stone", qty: 4 }],
       [{ id: "wood", qty: 16 }, { id: "stone", qty: 10 }],
       [{ id: "wood", qty: 24 }, { id: "stone", qty: 20 }, { id: "iron", qty: 4 }],
     ],
-    effect: (lvl) => (lvl <= 0 ? "Open to the night" : `Night attackers −${lvl * 25}%`),
+    effect: (lvl) => (lvl <= 0 ? "Half the bailey is rubble" : `Houses +${lvl} more survivors`),
   },
   forge: {
     id: "forge",

@@ -43,7 +43,7 @@ export const SKILLS: SkillNode[] = [
   { id: "w_berserk", tree: "warfare", name: "Berserker", maxRank: 2, x: 1, y: 3, requires: ["w_bulwark"], effect: (r) => `+${r * 25}% damage below half health` },
 
   // --- Endurance ---
-  { id: "e_irongut", tree: "endurance", name: "Iron Gut", maxRank: 3, x: 1, y: 0, requires: [], effect: (r) => `−${r * 12}% hunger & thirst loss` },
+  { id: "e_irongut", tree: "endurance", name: "Iron Gut", maxRank: 3, x: 1, y: 0, requires: [], effect: (r) => `+${r * 8} max health` },
   { id: "e_forager", tree: "endurance", name: "Forager", maxRank: 2, x: 0, y: 1, requires: ["e_irongut"], effect: (r) => `+${r} to what you gather` },
   { id: "e_plaguewer", tree: "endurance", name: "Plague-ward", maxRank: 2, x: 1, y: 1, requires: ["e_irongut"], effect: (r) => `−${r * 25}% infection taken` },
   { id: "e_fleet", tree: "endurance", name: "Fleet-foot", maxRank: 2, x: 2, y: 1, requires: ["e_irongut"], effect: (r) => `+${r * 8}% move speed` },
@@ -55,9 +55,9 @@ export const SKILLS: SkillNode[] = [
   // --- Dominion ---
   { id: "d_builder", tree: "dominion", name: "Master Builder", maxRank: 2, x: 1, y: 0, requires: [], effect: (r) => `−${r * 15}% build costs` },
   { id: "d_bountiful", tree: "dominion", name: "Bountiful", maxRank: 2, x: 0, y: 1, requires: ["d_builder"], effect: (r) => `+${r * 50}% settler tribute` },
-  { id: "d_warden", tree: "dominion", name: "Warden", maxRank: 2, x: 1, y: 1, requires: ["d_builder"], effect: (r) => `Guards strike +${r * 50}% harder` },
+  { id: "d_warden", tree: "dominion", name: "Warden", maxRank: 2, x: 1, y: 1, requires: ["d_builder"], effect: (r) => `−${r * 4} damage taken` },
   { id: "d_medic", tree: "dominion", name: "Field Medic", maxRank: 2, x: 2, y: 1, requires: ["d_builder"], effect: (r) => `+${r * 25}% healing` },
-  { id: "d_fortify", tree: "dominion", name: "Fortify", maxRank: 2, x: 1, y: 2, requires: ["d_warden"], effect: (r) => `−${r * 20}% night attackers` },
+  { id: "d_fortify", tree: "dominion", name: "Fortify", maxRank: 2, x: 1, y: 2, requires: ["d_warden"], effect: (r) => `+${r * 15}% settler tribute` },
   { id: "d_quarter", tree: "dominion", name: "Quartermaster", maxRank: 1, x: 2, y: 2, requires: ["d_medic"], effect: () => `+3 settlers may be housed` },
   { id: "d_rally", tree: "dominion", name: "Rally", maxRank: 1, x: 1, y: 3, requires: ["d_fortify"], effect: () => `Heal steadily within your walls` },
 ];
@@ -71,7 +71,6 @@ export interface Mods {
   dmgReduce: number;
   cooldownMult: number;
   lowHpDmg: number;
-  decayMult: number;
   gatherBonus: number;
   lootLuck: number;
   moveMult: number;
@@ -82,8 +81,6 @@ export interface Mods {
   buildCostMult: number;
   tributeMult: number;
   healMult: number;
-  guardMult: number;
-  raidMult: number;
   rallyRegen: number;
   capBonus: number;
 }
@@ -95,11 +92,10 @@ export function computeMods(ranks: Record<string, number>): Mods {
     critChance: 0.12 + 0.05 * r("w_keen"),
     armorPen: 3 * r("w_sunder"),
     cleave: r("w_cleave") > 0,
-    maxHpBonus: 12 * r("w_vigor"),
-    dmgReduce: 5 * r("w_bulwark"),
+    maxHpBonus: 12 * r("w_vigor") + 8 * r("e_irongut"),
+    dmgReduce: 5 * r("w_bulwark") + 4 * r("d_warden"),
     cooldownMult: Math.max(0.5, 1 - 0.1 * r("w_rapid")),
     lowHpDmg: 0.25 * r("w_berserk"),
-    decayMult: Math.max(0.3, 1 - 0.12 * r("e_irongut")),
     gatherBonus: r("e_forager"),
     lootLuck: r("e_scavenger"),
     moveMult: 1 + 0.08 * r("e_fleet"),
@@ -108,10 +104,8 @@ export function computeMods(ranks: Record<string, number>): Mods {
     senseMult: Math.max(0.4, 1 - 0.2 * r("e_prowl")),
     lightBonus: 3 * r("e_darksight"),
     buildCostMult: Math.max(0.4, 1 - 0.15 * r("d_builder")),
-    tributeMult: 1 + 0.5 * r("d_bountiful"),
+    tributeMult: 1 + 0.5 * r("d_bountiful") + 0.15 * r("d_fortify"),
     healMult: 1 + 0.25 * r("d_medic"),
-    guardMult: 1 + 0.5 * r("d_warden"),
-    raidMult: Math.max(0.2, 1 - 0.2 * r("d_fortify")),
     rallyRegen: 0.8 * r("d_rally"),
     capBonus: 3 * r("d_quarter"),
   };

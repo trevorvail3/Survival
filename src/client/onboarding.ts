@@ -4,7 +4,7 @@
  * Learn-by-doing onboarding. A short ordered list of objectives that advance as
  * the player actually performs each action (move, gather, search, open the pack,
  * use the town board, set out, rescue), plus one-time contextual tips (first
- * wound, nightfall, hunger, infection, a boss). Progress lives on `world.onboard`
+ * wound, nightfall, infection, a boss). Progress lives on `world.onboard`
  * so it persists with the save and resets with a New Game.
  *
  * The loop feeds `notify(signal)`; the tutorial returns any messages to toast and
@@ -28,8 +28,6 @@ const STEPS: Step[] = [
 const HINTS: Record<string, string> = {
   hurt: "Wounded — press 1 to bind it with a Poultice.",
   night: "Night falls. The dead grow bold — keep to the light or head home.",
-  hungry: "You hunger — press 2 to eat.",
-  thirsty: "You thirst — press 3 to drink.",
   infected: "The plague festers in your blood — press 5 for an Antidote.",
   boss: "A great foe stirs nearby. Come armed — or flee.",
 };
