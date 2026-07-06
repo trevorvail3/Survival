@@ -13,6 +13,7 @@ import {
   assignRole,
   build,
   craft,
+  dismantle,
   dodge,
   isStation,
   orderAttack,
@@ -291,6 +292,7 @@ export class Game {
       onHotbar: (id: ItemId) => { this.useHotbar(id, performance.now()); },
       onTogglePack: () => { this.hud.togglePack(); audio.play("click"); this.tut("pack"); },
       onToggleSkills: () => { this.hud.toggleSkills(); audio.play("click"); },
+      onDismantle: (i: number) => { const ev: GameEvent[] = []; if (dismantle(this.world, this.content, i, ev)) this.dispatch(ev, performance.now()); },
       onTravel: (regionId: string) => {
         const fromHome = this.world.zoneId === "home";
         const ev: GameEvent[] = [];
@@ -354,6 +356,7 @@ export class Game {
           if (e.rarity === "epic" || e.rarity === "legendary") { audio.play("levelup"); this.hud.tip(`<span style="color:${rm.color}">${rm.name}</span> drop — <b>${nm}</b> ◈${e.power}`); }
           break;
         }
+        case "salvage": audio.play("craft"); this.hud.pushLog(`Salvaged into ${e.qty}× ${this.content.items[e.id]?.name ?? e.id}.`); break;
         case "victory": audio.play("levelup"); audio.play("daybreak"); this.hud.showBanner("The Hold is Cleansed", "The Rot-Mother is dead. The plague ends with you.", 6000); this.hud.pushLog("You have won. The Hold is free — range on if you wish."); break;
         case "heal": audio.play("heal"); break;
         case "eat": audio.play("eat"); break;
