@@ -12,7 +12,7 @@ import type { Content, InvSlot, ItemDef, ItemId, SettlerRole, StructureId, World
 import { SETTLER_ROLES } from "../core/types.ts";
 import { glyph } from "./glyph.ts";
 import { itemIconSVG } from "./itemIcon.ts";
-import { canBuild, canCraft, canSpendSkill, capacity, dismantleYield, idleSettlers, INV_COLS, isNight } from "../core/world.ts";
+import { canBuild, canCraft, canSpendSkill, capacity, dismantleYield, idleSettlers, INV_COLS } from "../core/world.ts";
 import { SKILLS, TREE_NAMES, pointsInTree, xpForNext, nodeUnlocked, type SkillTree } from "../content/skills.ts";
 import { SKILL_META, SKILL_GROUPS, SKILL_IDS, MAX_SKILL, levelForXp, levelProgress, type SkillId } from "../content/trainskills.ts";
 import { RARITY_META, rarityOf, slotPower, characterPower, weaponDamage, armorSoak, isGearDef, ARMOR_SLOTS } from "../content/gear.ts";
@@ -30,7 +30,6 @@ export interface HudHandlers {
   onSpendSkill: (nodeId: string) => void;
   onStore: (packIndex: number) => void;
   onTake: (stashIndex: number) => void;
-  onDodge: () => void;
   onHotbar: (itemId: ItemId) => void;
   onTogglePack: () => void;
   onToggleSkills: () => void;
@@ -75,7 +74,6 @@ type NearStations = { forge: boolean; workshop: boolean };
 
 export class Hud {
   private vitals: HTMLElement;
-  private clock: HTMLElement;
   private hotbar: HTMLElement;
   private promptEl: HTMLElement;
   private logEl: HTMLElement;
@@ -105,13 +103,11 @@ export class Hud {
   private hotbarSig = "";
   /** Tab-bar buttons keyed by the mode they open, for active-tab highlighting. */
   private tabButtons: Partial<Record<"pack" | "settle" | "travel" | "skills" | "stash", HTMLButtonElement>> = {};
-  private dodgeBtn: HTMLButtonElement | null = null;
   private mmCanvas: HTMLCanvasElement;
 
   constructor(private root: HTMLElement, private content: Content, private handlers: HudHandlers) {
     root.innerHTML = "";
     this.vitals = this.panel({ left: "12px", top: "12px", minWidth: "196px" });
-    this.clock = this.panel({ right: "12px", top: "12px", textAlign: "right", minWidth: "160px" });
     this.logEl = this.panel({ left: "12px", bottom: "12px", maxWidth: "340px", fontSize: "12px", color: "var(--ink-dim)" });
     this.hotbar = this.floating({ left: "50%", bottom: "12px", transform: "translateX(-50%)", display: "flex", gap: "6px" });
     this.promptEl = this.floating({ left: "50%", bottom: "76px", transform: "translateX(-50%)", pointerEvents: "none", fontFamily: "'Cinzel',serif", fontSize: "13px", letterSpacing: "0.08em", color: "var(--amber)", textShadow: "0 1px 6px #000", whiteSpace: "nowrap" });
@@ -153,16 +149,17 @@ export class Hud {
 
     this.audioBtn = document.createElement("button");
     this.audioBtn.className = "act";
-    Object.assign(this.audioBtn.style, { position: "absolute", right: "12px", top: "104px", width: "40px", padding: "6px" });
+    Object.assign(this.audioBtn.style, { position: "absolute", right: "12px", top: "144px", width: "40px", padding: "6px" });
     this.audioBtn.innerHTML = ico(audio.getMuted() ? "mute" : "sound");
     this.audioBtn.onclick = () => { audio.setMuted(!audio.getMuted()); this.audioBtn.innerHTML = ico(audio.getMuted() ? "mute" : "sound"); };
     root.appendChild(this.audioBtn);
 
-    // Minimap — a small always-on overhead view of your surroundings.
+    // Minimap — a small always-on overhead view of your surroundings, tucked
+    // into the top-right corner.
     const mmSize = 120;
     const mmWrap = document.createElement("div");
     Object.assign(mmWrap.style, {
-      position: "absolute", right: "12px", top: "152px", width: `${mmSize}px`, height: `${mmSize}px`,
+      position: "absolute", right: "12px", top: "12px", width: `${mmSize}px`, height: `${mmSize}px`,
       borderRadius: "50%", overflow: "hidden", border: "2px solid var(--panel-edge)",
       boxShadow: "0 4px 18px rgba(0,0,0,0.6)",
     } as Partial<CSSStyleDeclaration>);
@@ -180,9 +177,9 @@ export class Hud {
     if (g) drawMinimap(g, world, this.mmCanvas.width, 16);
   }
 
-  /** The permanent, always-visible OSRS-style tab strip — every panel (and
-   *  dodge) opens by clicking here. There is no keyboard control surface and
-   *  no device-specific gating: the same buttons serve mouse and touch. */
+  /** The permanent, always-visible OSRS-style tab strip — every panel opens by
+   *  clicking here. There is no keyboard control surface and no device-specific
+   *  gating: the same buttons serve mouse and touch. */
   private buildTabBar(): void {
     const TABS: { mode: "pack" | "settle" | "travel" | "skills" | "stash"; glyphName: string; label: string; onTap: () => void }[] = [
       { mode: "pack", glyphName: "backpack", label: "Pack", onTap: () => this.handlers.onTogglePack() },
@@ -193,7 +190,7 @@ export class Hud {
     ];
     const bar = document.createElement("div");
     Object.assign(bar.style, {
-      position: "absolute", right: "12px", top: "284px", zIndex: "10",
+      position: "absolute", right: "12px", top: "200px", zIndex: "10",
       display: "flex", flexDirection: "column", gap: "6px",
     } as Partial<CSSStyleDeclaration>);
     for (const t of TABS) {
@@ -210,30 +207,10 @@ export class Hud {
       this.tabButtons[t.mode] = b;
     }
     this.root.appendChild(bar);
-
-    // Dodge is a combat action, not a menu tab — kept visually distinct
-    // (large, round, amber) and separate from the tab strip above.
-    const dodgeBtn = document.createElement("button");
-    dodgeBtn.className = "act";
-    dodgeBtn.title = "Dodge";
-    dodgeBtn.setAttribute("aria-label", "Dodge");
-    Object.assign(dodgeBtn.style, {
-      position: "absolute", right: "16px", bottom: "92px", zIndex: "10",
-      width: "62px", height: "62px", padding: "0", borderRadius: "50%",
-      fontSize: "26px", lineHeight: "1", display: "flex",
-      alignItems: "center", justifyContent: "center",
-      borderColor: "var(--amber)", color: "var(--amber)",
-    } as Partial<CSSStyleDeclaration>);
-    dodgeBtn.innerHTML = "↺";
-    dodgeBtn.onclick = () => this.handlers.onDodge();
-    this.root.appendChild(dodgeBtn);
-    this.dodgeBtn = dodgeBtn;
   }
 
-  /** Amber-highlight whichever tab's panel is currently open; hide dodge while
-   *  a panel covers the screen (there's nothing sensible to dodge at). */
+  /** Amber-highlight whichever tab's panel is currently open. */
   private updateTabHighlight(): void {
-    if (this.dodgeBtn) this.dodgeBtn.style.display = this.isModalOpen ? "none" : "flex";
     for (const [m, btn] of Object.entries(this.tabButtons)) {
       btn.style.borderColor = m === this.mode ? "var(--amber)" : "";
       btn.style.color = m === this.mode ? "var(--amber)" : "";
@@ -436,23 +413,6 @@ export class Hud {
       `<div style="display:flex;align-items:center;gap:6px;margin-top:5px;font-size:12px">
         <span style="color:var(--amber);font-family:'Cinzel',serif">◈ Power ${characterPower(p.equipped, [...ARMOR_SLOTS.map((s) => p.armor[s]), p.offhand])}</span>
         ${world.zoneId !== "home" ? `<span style="color:var(--ink-dim);font-size:11px">/ rec. ${this.content.regions.find((r) => r.id === world.zoneId)?.power ?? 0}</span>` : ""}
-      </div>`;
-
-    const night = isNight(world.timeOfDay);
-    const alive = world.enemies.filter((e) => e.state !== "dead").length;
-    const phase = Math.floor(world.timeOfDay * 24);
-    const cap = capacity(world);
-    const zoneName = world.zoneId === "home" ? "Your Settlement" : (this.content.regions.find((r) => r.id === world.zoneId)?.name ?? "The Wilds");
-    this.clock.innerHTML =
-      `<div style="font-family:'Cinzel',serif;font-size:11px;letter-spacing:.1em;color:var(--amber);text-align:right;margin-bottom:2px">${zoneName}</div>` +
-      `<div class="hud-heading" style="justify-content:flex-end">Day ${world.day}</div>` +
-      `<div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;font-size:13px">
-        <span style="width:16px;height:16px;color:${night ? "#8fa6c0" : "#c8922e"};display:inline-block">${glyph(night ? "moon" : "sun")}</span>
-        <span style="color:${night ? "#8fa6c0" : "var(--ink)"}">${night ? "Night" : "Day"} · ${String(phase).padStart(2, "0")}:00</span>
-      </div>` +
-      `<div style="font-size:12px;color:var(--ink-dim);margin-top:4px;display:flex;gap:10px;justify-content:flex-end">
-        <span><span style="width:13px;height:13px;color:#7aa06a;display:inline-block;vertical-align:-2px">${glyph("people")}</span> ${world.settlement.population}/${cap}</span>
-        <span><span style="width:13px;height:13px;color:#8e2b23;display:inline-block;vertical-align:-2px">${glyph("skull")}</span> ${alive}</span>
       </div>`;
 
     // Rebuild only when a shown quantity actually changed — quantities are

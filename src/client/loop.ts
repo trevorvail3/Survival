@@ -15,7 +15,6 @@ import {
   craft,
   decryptCoffer,
   dismantle,
-  dodge,
   isStation,
   orderAttack,
   orderInteract,
@@ -109,8 +108,9 @@ export class Game {
     this.events.length = 0;
 
     // --- Input: click only. Pack/Skills/Settlement/Travel/Stash open from the
-    // tab bar and dodge from its own button (see Hud.buildTabBar) — there is
-    // no keyboard control surface. ---
+    // tab bar (see Hud.buildTabBar) — there is no keyboard control surface. ---
+    const zf = this.input.consumeZoom();
+    if (zf !== 1) this.zoom = Math.max(1, Math.min(3.5, this.zoom * zf));
     const click = this.input.consumeClick();
     if (click && p.alive && !this.hud.isModalOpen) this.handleClick(click.x, click.y);
 
@@ -271,14 +271,6 @@ export class Game {
       onSpendSkill: (nodeId: string) => { spendSkill(this.world, nodeId); this.hud.markDirty(); },
       onStore: (i: number) => { storeToStash(this.world, this.content, i); this.hud.markDirty(); },
       onTake: (i: number) => { takeFromStash(this.world, this.content, i); this.hud.markDirty(); },
-      onDodge: () => {
-        const p = this.world.player;
-        if (!p.alive || this.hud.isModalOpen) return;
-        const aim = this.screenToWorld(this.input.mouseX, this.input.mouseY);
-        const ev: GameEvent[] = [];
-        dodge(this.world, aim.x, aim.y, ev);
-        this.dispatch(ev, performance.now());
-      },
       onHotbar: (id: ItemId) => { this.useHotbar(id, performance.now()); },
       onTogglePack: () => { this.hud.togglePack(); audio.play("click"); this.tut("pack"); },
       onToggleSkills: () => { this.hud.toggleSkills(); audio.play("click"); },
@@ -327,7 +319,6 @@ export class Game {
       switch (e.t) {
         case "melee": audio.play("melee"); break;
         case "bowshot": audio.play("bowshot"); this.fx.muzzle(p.pos.x, p.pos.y, p.facing); break;
-        case "dodge": audio.play("dodge"); this.fx.sparks(e.x, e.y, "#b8c2cc", 5); break;
         case "noammo": audio.play("dryfire"); this.hud.pushLog("Out of arrows."); break;
         case "hit": audio.play(e.crit ? "crit" : "hit"); this.fx.blood(e.x, e.y, e.crit ? 16 : 9); this.fx.float(e.x, e.y - 0.4, String(e.dmg), e.crit ? "#ff6a4a" : "#e8d8b0", e.crit ? 17 : 13); break;
         case "miss": this.fx.float(e.x, e.y - 0.4, "miss", "#7d858c", 11); break;

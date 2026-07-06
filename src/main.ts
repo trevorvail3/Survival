@@ -42,7 +42,6 @@ const handlers: HudHandlers = {
   onSpendSkill: (id) => gameHandlers?.onSpendSkill(id),
   onStore: (i) => gameHandlers?.onStore(i),
   onTake: (i) => gameHandlers?.onTake(i),
-  onDodge: () => gameHandlers?.onDodge(),
   onHotbar: (id) => gameHandlers?.onHotbar(id),
   onTogglePack: () => gameHandlers?.onTogglePack(),
   onToggleSkills: () => gameHandlers?.onToggleSkills(),
@@ -81,7 +80,7 @@ veil.innerHTML = `
     <button class="start" id="startBtn" ${saved ? `style="background:#2a2622;color:#c3c6c4"` : ""}>${saved ? "New Game" : "Take Up the Blade"}</button>
   </div>
   <div style="font-size:12px;color:#5a5f5a;letter-spacing:.08em;max-width:640px;text-align:center;line-height:1.8">
-    Everything is a click — no keyboard needed. <b>Click</b> to move, fight, search and gather · <b>↺</b> to dodge<br/>
+    Everything is a click — no keyboard needed. <b>Click</b> to move, fight, search and gather · <b>scroll or pinch</b> to zoom<br/>
     the tabs on the right open your <b>Pack</b>, <b>Skills</b>, <b>Settlement</b>, <b>Expedition</b> map and <b>Stash</b> from anywhere
   </div>`;
 app.appendChild(veil);

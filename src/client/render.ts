@@ -582,11 +582,6 @@ export function drawWorld(
   }
 
   if (p.alive) {
-    // Dodge i-frame flash: a pale ring while invulnerable.
-    if (world.clock < p.invulnUntil) {
-      g.strokeStyle = "rgba(180,210,235,0.7)"; g.lineWidth = 2.5;
-      g.beginPath(); g.arc(p.pos.x * TILE, p.pos.y * TILE, TILE * 0.5, 0, Math.PI * 2); g.stroke();
-    }
     const anim: AvatarAnim = { now, moving: p.path.length > 0 };
     const since = p.nextAttack - world.clock;
     if (since > 0) anim.swing = Math.min(1, Math.max(0, since / 240));

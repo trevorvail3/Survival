@@ -63,7 +63,6 @@ export function daylight(timeOfDay: number): number {
 export type GameEvent =
   | { t: "melee"; x: number; y: number }
   | { t: "bowshot"; x: number; y: number }
-  | { t: "dodge"; x: number; y: number }
   | { t: "noammo" }
   | { t: "hit"; x: number; y: number; dmg: number; crit: boolean }
   | { t: "miss"; x: number; y: number }
@@ -339,10 +338,6 @@ export function createWorld(content: Content, rng: () => number): World {
     nextAttack: 0,
     infection: 0,
     alive: true,
-    invulnUntil: 0,
-    dashUntil: 0,
-    dashReadyAt: 0,
-    dashDir: { x: 1, y: 0 },
     level: 1,
     xp: 0,
     points: 0,
@@ -490,26 +485,6 @@ export function stop(world: World): void {
   world.player.path = [];
 }
 
-export const DODGE_COOLDOWN = 1600;
-
-/** A quick evasive dash toward (tx,ty) with brief invulnerability. The one
- *  active-defense verb: time it to slip a blow, especially a boss's. */
-export function dodge(world: World, tx: number, ty: number, out: GameEvent[]): boolean {
-  const p = world.player;
-  if (!p.alive || world.clock < p.dashReadyAt || world.clock < p.dashUntil) return false;
-  let dx = tx - p.pos.x, dy = ty - p.pos.y;
-  const len = Math.hypot(dx, dy);
-  if (len < 0.3) { dx = Math.cos(p.facing); dy = Math.sin(p.facing); }
-  else { dx /= len; dy /= len; }
-  p.dashDir = { x: dx, y: dy };
-  p.dashUntil = world.clock + 240;
-  p.invulnUntil = world.clock + 300;
-  p.dashReadyAt = world.clock + DODGE_COOLDOWN;
-  p.facing = Math.atan2(dy, dx);
-  out.push({ t: "dodge", x: p.pos.x, y: p.pos.y });
-  return true;
-}
-
 // ---------------------------------------------------------------------------
 // Player advance: follow path, execute order, auto-fight
 // ---------------------------------------------------------------------------
@@ -537,19 +512,9 @@ function followPath(world: World, dt: number): boolean {
   return p.path.length === 0;
 }
 
-const DASH_SPEED = 10;
-
 function advancePlayer(world: World, content: Content, ctx: { rng: () => number }, dt: number, out: GameEvent[]): void {
   const p = world.player;
   if (!p.alive) return;
-  // A dodge in progress overrides orders: a fast lunge, then normal control.
-  if (world.clock < p.dashUntil) {
-    const nx = p.pos.x + p.dashDir.x * DASH_SPEED * dt;
-    const ny = p.pos.y + p.dashDir.y * DASH_SPEED * dt;
-    if (!blocked(world, nx, p.pos.y, PLAYER_RADIUS)) p.pos.x = nx;
-    if (!blocked(world, p.pos.x, ny, PLAYER_RADIUS)) p.pos.y = ny;
-    return;
-  }
   const order = p.order;
 
   if (order.type === "attack") {
@@ -750,7 +715,6 @@ function openExtraction(world: World, x: number, y: number, out: GameEvent[]): v
 
 function attackPlayer(world: World, content: Content, e: Enemy, out: GameEvent[]): void {
   const p = world.player;
-  if (world.clock < p.invulnUntil) return; // dodged — no damage
   const eDef = content.enemies[e.kind];
   // Mitigation is the sum of every equipped armour piece (each its base soak ×
   // rarity + Power) plus perks; the region's Power gap scales incoming damage
@@ -787,7 +751,7 @@ function downPlayer(world: World, content: Content, rng: () => number, out: Game
   }
   p.hp = Math.max(1, Math.round(p.maxHp * 0.5));
   p.infection = 0;
-  p.nextAttack = 0; p.dashUntil = 0; p.invulnUntil = 0;
+  p.nextAttack = 0;
   if (inField) travelTo(world, content, rng, "home", out);
   else { p.pos = { x: world.entry.x + 0.5, y: world.entry.y + 0.5 }; stop(world); }
   world.timeOfDay = 0.28;
