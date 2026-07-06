@@ -8,7 +8,7 @@
  * as in the sibling `world` project.
  */
 
-import type { Content, ItemId, SettlerRole, StructureId, World } from "../core/types.ts";
+import type { Content, ItemId, PropKind, SettlerRole, StructureId, World } from "../core/types.ts";
 import {
   assignRole,
   build,
@@ -34,7 +34,7 @@ import { isNight } from "../core/world.ts";
 import { drawLighting, drawWorld, TILE, type Camera } from "./render.ts";
 import { Fx } from "./fx.ts";
 import { Input } from "./input.ts";
-import { Hud } from "./hud.ts";
+import { Hud, type NearStations } from "./hud.ts";
 import { SKILL_META, type SkillId } from "../content/trainskills.ts";
 import { RARITY_META, type Rarity } from "../content/gear.ts";
 import { audio, type SceneKey } from "./audio.ts";
@@ -62,6 +62,7 @@ export class Game {
   private nextHeartbeat = 0;
   private events: GameEvent[] = [];
   private pendingStation: number | null = null;
+  private lastNearSig = "";
   private lastSave = 0;
   private tutorial: Tutorial;
 
@@ -164,7 +165,12 @@ export class Game {
     this.g.setTransform(1, 0, 0, 1, 0, 0);
     drawLighting(this.g, world, sc, this.viewW, this.viewH, this.zoom, this.fx.activeLights(), playerMods(p).lightBonus);
 
-    this.hud.update(world, this.hoverPrompt(), { forge: this.near("forge"), workshop: this.near("workbench") });
+    const near = this.nearStations();
+    // Walking to/from a station changes what its panel lets you do, so force a
+    // rebuild of the open panel when the set of nearby stations changes.
+    const nearSig = `${near.forge}${near.workshop}${near.townboard}${near.maptable}`;
+    if (nearSig !== this.lastNearSig) { this.lastNearSig = nearSig; this.hud.markDirty(); }
+    this.hud.update(world, this.hoverPrompt(), near);
     this.hud.renderMinimap(world);
     this.input.endFrame();
 
@@ -211,10 +217,14 @@ export class Game {
     this.fx.ping(Math.floor(wpt.x) + 0.5, Math.floor(wpt.y) + 0.5, "#9fb0c0");
   }
 
-  private near(kind: "forge" | "workbench"): boolean {
+  private near(kind: PropKind): boolean {
     const p = this.world.player;
     for (const pr of this.world.props) if (pr.kind === kind && Math.hypot(pr.pos.x + 0.5 - p.pos.x, pr.pos.y + 0.5 - p.pos.y) < 2.4) return true;
     return false;
+  }
+  /** Which stations the player is standing at (actions are gated to these). */
+  private nearStations(): NearStations {
+    return { forge: this.near("forge"), workshop: this.near("workbench"), townboard: this.near("townboard"), maptable: this.near("maptable") };
   }
 
   private hoverPrompt(): string | null {
