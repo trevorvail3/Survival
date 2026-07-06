@@ -127,24 +127,36 @@ export function generateHome(rng: () => number): Layout {
   addProp("stash", cx + 4, cy + 1); // settlement storage — safe from death
   addProp("barrel", x1 - 2, cy + 3, "barrel");
 
-  // A little yard to gather in right by home.
-  const yard = (kind: Prop["kind"], n: number, loot: string) => {
+  // The yard below the gate is the tutorial ground: three clustered gathering
+  // zones so a new player learns each activity in an obvious spot — a grove of
+  // trees, a rocky quarry of stone/ore, and a pond to fish. Clusters are placed
+  // in fixed lanes (left / right / centre) so they read as designed areas.
+  const yardTop = y1 + 3, yardBot = g.h - 4;
+  const cluster = (kind: Prop["kind"], loot: string, cxr: number, cyr: number, n: number, radius: number, tile?: TileType) => {
     let placed = 0, tries = 0;
-    while (placed < n && tries++ < n * 30) {
-      const x = randInt(rng, 3, g.w - 4), y = randInt(rng, y1 + 2, g.h - 4);
-      if (walkableGround(g, x, y)) { addProp(kind, x, y, loot); placed++; }
+    while (placed < n && tries++ < n * 40) {
+      const x = cxr + randInt(rng, -radius, radius);
+      const y = cyr + randInt(rng, -radius, radius);
+      if (y < yardTop || y > yardBot) continue;
+      if (!walkableGround(g, x, y)) continue;
+      if (props.some((p) => p.pos.x === x && p.pos.y === y)) continue;
+      if (tile) g.set(x, y, tile);
+      addProp(kind, x, y, loot);
+      placed++;
     }
   };
-  yard("tree", 5, "tree");
-  yard("rock", 3, "rock");
-  yard("herbs", 4, "herbs");
-
-  // A small pond in the yard with fishing spots (Fishing + Cooking at home).
-  const pcx = randInt(rng, 5, g.w - 6), pcy = randInt(rng, y1 + 3, g.h - 5);
-  for (let y = pcy - 2; y <= pcy + 2; y++) for (let x = pcx - 2; x <= pcx + 2; x++)
-    if ((x - pcx) ** 2 + (y - pcy) ** 2 <= 4 && rng() < 0.85) g.set(x, y, "water");
+  const midY = Math.floor((yardTop + yardBot) / 2);
+  // Grove — a stand of timber on the left.
+  cluster("tree", "tree", cx - 12, midY, 8, 3);
+  cluster("herbs", "herbs", cx - 12, midY + 2, 4, 3);
+  // Quarry — a broken rock face on the right (rubble ground for flavour).
+  cluster("rock", "rock", cx + 12, midY, 9, 3, "rubble");
+  // A fishing pond in the centre-bottom with several spots.
+  const pcx = cx, pcy = yardBot - 2;
+  for (let y = pcy - 2; y <= pcy + 2; y++) for (let x = pcx - 3; x <= pcx + 3; x++)
+    if ((x - pcx) ** 2 / 2 + (y - pcy) ** 2 <= 5 && rng() < 0.9) g.set(x, y, "water");
   const inCompound = (x: number, y: number) => x >= x0 - 1 && x <= x1 + 1 && y >= y0 - 1 && y <= y1 + 1;
-  placeFishpools(g, addProp, rng, inCompound, 2);
+  placeFishpools(g, addProp, rng, inCompound, 5);
 
   return { map: { w: g.w, h: g.h, tiles: g.tiles, indoor: g.indoor }, props, playerStart: { x: cx + 2, y: y1 - 2 }, home: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } };
 }

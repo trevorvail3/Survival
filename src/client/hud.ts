@@ -70,7 +70,7 @@ function weaponStatLines(_name: string, dmg: number, w: import("../core/types.ts
   return lines;
 }
 
-type NearStations = { forge: boolean; workshop: boolean };
+export type NearStations = { forge: boolean; workshop: boolean; townboard: boolean; maptable: boolean };
 
 export class Hud {
   private vitals: HTMLElement;
@@ -93,7 +93,10 @@ export class Hud {
   private inspectTimer = 0;
   private audioBtn: HTMLButtonElement;
   private mode: "none" | "pack" | "settle" | "travel" | "skills" | "stash" = "none";
-  private near: NearStations = { forge: false, workshop: false };
+  /** The docked side for all modal panels (flippable via the ⇄ control). */
+  private panelSide: "left" | "right" = "left";
+  private modalPanels: HTMLElement[] = [];
+  private near: NearStations = { forge: false, workshop: false, townboard: false, maptable: false };
   private log: string[] = [];
   private tipTimer = 0;
   private lastTask: string | null = null;
@@ -111,22 +114,31 @@ export class Hud {
     this.logEl = this.panel({ left: "12px", bottom: "12px", maxWidth: "340px", fontSize: "12px", color: "var(--ink-dim)" });
     this.hotbar = this.floating({ left: "50%", bottom: "12px", transform: "translateX(-50%)", display: "flex", gap: "6px" });
     this.promptEl = this.floating({ left: "50%", bottom: "76px", transform: "translateX(-50%)", pointerEvents: "none", fontFamily: "'Cinzel',serif", fontSize: "13px", letterSpacing: "0.08em", color: "var(--amber)", textShadow: "0 1px 6px #000", whiteSpace: "nowrap" });
-    const modalZ = { zIndex: "50" };
-    this.pack = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(560px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none", ...modalZ });
-    this.settle = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(520px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none", ...modalZ });
-    this.travel = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(520px,92vw)", maxHeight: "86vh", overflow: "auto", display: "none", ...modalZ });
-    this.skillsP = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(780px,96vw)", maxHeight: "90vh", overflow: "auto", display: "none", ...modalZ });
-    this.stashP = this.panel({ left: "50%", top: "50%", transform: "translate(-50%,-50%)", width: "min(680px,94vw)", maxHeight: "88vh", overflow: "auto", display: "none", ...modalZ });
+    // Modal panels are stationary side-drawers, not floating centre overlays:
+    // docked to one edge (top-to-bottom), a fixed minimal width, flippable
+    // left/right (see applyPanelSide / the ⇄ control). Left by default so the
+    // right-hand tab strip stays clear.
+    const dock: Partial<CSSStyleDeclaration> = {
+      position: "fixed", top: "12px", bottom: "12px", width: "min(370px,94vw)",
+      overflow: "auto", display: "none", zIndex: "50", transform: "none",
+    };
+    this.pack = this.panel({ ...dock });
+    this.settle = this.panel({ ...dock });
+    this.travel = this.panel({ ...dock });
+    this.skillsP = this.panel({ ...dock });
+    this.stashP = this.panel({ ...dock });
+    this.modalPanels = [this.pack, this.settle, this.travel, this.skillsP, this.stashP];
+    this.applyPanelSide();
 
     this.bossBar = this.floating({ left: "50%", top: "64px", transform: "translateX(-50%)", width: "min(440px,72vw)", display: "none", textAlign: "center" });
     this.tracker = this.panel({ left: "12px", top: "172px", maxWidth: "230px", display: "none" });
     this.tipEl = this.floating({ left: "50%", top: "112px", transform: "translateX(-50%)", width: "min(460px,86vw)", textAlign: "center", opacity: "0", transition: "opacity 0.5s ease", pointerEvents: "none" });
 
-    // Dim backdrop behind modal panels — clicking/tapping it closes the panel,
-    // so you can always dismiss (even if a tall panel has scrolled its ✕ away).
+    // Transparent click-catcher behind the docked panel — tapping anywhere off
+    // the panel closes it. No dimming: the world stays fully visible (minimal).
     this.backdrop = document.createElement("div");
     Object.assign(this.backdrop.style, {
-      position: "fixed", inset: "0", background: "rgba(0,0,0,0.45)",
+      position: "fixed", inset: "0", background: "transparent",
       zIndex: "40", display: "none", pointerEvents: "auto",
     } as Partial<CSSStyleDeclaration>);
     this.backdrop.onclick = () => this.closeAll();
@@ -190,7 +202,7 @@ export class Hud {
     ];
     const bar = document.createElement("div");
     Object.assign(bar.style, {
-      position: "absolute", right: "12px", top: "200px", zIndex: "10",
+      position: "absolute", right: "12px", top: "200px", zIndex: "55",
       display: "flex", flexDirection: "column", gap: "6px",
     } as Partial<CSSStyleDeclaration>);
     for (const t of TABS) {
@@ -352,12 +364,27 @@ export class Hud {
   }
 
   private addClose(panel: HTMLElement): void {
-    // sticky so it stays pinned to the panel's top-right even when the panel
-    // scrolls (the stash/bank is taller than the screen).
-    panel.insertAdjacentHTML("afterbegin",
-      `<button class="act closeX" aria-label="close" style="position:sticky;float:right;top:0;margin:-2px -2px 0 8px;width:34px;height:34px;padding:0;border-radius:50%;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;z-index:2">✕</button>`);
+    // Sticky controls pinned to the panel's top edge (stay put as it scrolls):
+    // ✕ closes; ⇄ flips the drawer to the other side.
+    const btn = (cls: string, label: string, glyph: string) =>
+      `<button class="act ${cls}" aria-label="${label}" title="${label}" style="position:sticky;float:right;top:0;margin:-2px -2px 0 8px;width:34px;height:34px;padding:0;border-radius:50%;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;z-index:2">${glyph}</button>`;
+    panel.insertAdjacentHTML("afterbegin", btn("closeX", "close", "✕") + btn("flipX", "move left/right", "⇄"));
     const x = panel.querySelector<HTMLButtonElement>(".closeX");
     if (x) x.onclick = () => this.closeAll();
+    const f = panel.querySelector<HTMLButtonElement>(".flipX");
+    if (f) f.onclick = () => this.flipSide();
+  }
+
+  /** Dock every modal panel to the current side. */
+  private applyPanelSide(): void {
+    for (const el of this.modalPanels) {
+      if (this.panelSide === "left") { el.style.left = "12px"; el.style.right = "auto"; }
+      else { el.style.right = "12px"; el.style.left = "auto"; }
+    }
+  }
+  private flipSide(): void {
+    this.panelSide = this.panelSide === "left" ? "right" : "left";
+    this.applyPanelSide();
   }
 
   /** Queues a banner rather than showing it immediately — several GameEvents
@@ -614,7 +641,7 @@ export class Hud {
       const powCol = myPow >= r.power ? "#7f9a3c" : myPow >= r.power - 8 ? "#c8922e" : "#c23b2c";
       const powTag = locked || cleansed ? "" : ` <tspan fill="${powCol}">◈${r.power}</tspan>`;
       const sub = locked ? `<tspan fill="#7a6b4a">sealed</tspan>` : cleansed ? `<tspan fill="#e6b24e">cleansed</tspan>` : `<tspan fill="${dcol}">${skulls(r.danger)}</tspan>${powTag}${here ? " · here" : ""}`;
-      const clickable = atHome && !locked;
+      const clickable = atHome && this.near.maptable && !locked;
       return `<g ${clickable ? `data-travel="${r.id}"` : ""} style="cursor:${clickable ? "pointer" : "default"};opacity:${locked ? 0.7 : 1}">
         <title>${r.name} — ${locked ? "Slay both the Barrow King and the Pale Prior to unlock." : r.blurb}</title>
         <circle cx="${px}" cy="${py}" r="${here ? 11 : 9}" fill="${fill}" stroke="${stroke}" stroke-width="2.5"/>
@@ -631,9 +658,11 @@ export class Hud {
       <text x="${hx}" y="${hy + 34}" text-anchor="middle" font-size="12" font-family="Cinzel, serif" fill="#e6dcc4">Settlement${atHome ? " · here" : ""}</text>
     </g>`;
 
-    const footer = atHome
-      ? `Choose an expedition — click a region to set out. Time passes on the road.`
-      : `You're in the field. There's no warp home — reach a <span style="color:#78b4dc">waystone</span> (an extraction point) on foot to leave with your haul. Slaying the region's warden opens one where it falls.`;
+    const footer = !atHome
+      ? `You're in the field. There's no warp home — reach a <span style="color:#78b4dc">waystone</span> (an extraction point) on foot to leave with your haul. Slaying the region's warden opens one where it falls.`
+      : this.near.maptable
+        ? `Choose an expedition — click a region to set out. Time passes on the road.`
+        : `<span style="color:var(--rust)">Stand at the war map</span> in your settlement to set out on an expedition.`;
 
     this.travel.innerHTML =
       `<div class="hud-heading" style="text-align:center">The Hold — ${atHome ? "choose an expedition" : "extraction"}</div>` +
@@ -739,7 +768,8 @@ export class Hud {
       ${toolbelt}
       <div class="hud-heading">The Pack</div>
       <div id="hud-pack-grid">${slots}</div>
-      <div class="hud-heading">Craft</div>${recipes}
+      <div class="hud-heading">Craft</div>
+      ${this.near.forge || this.near.workshop ? "" : `<div style="text-align:center;font-size:12px;color:var(--rust);padding:4px 0 8px">Work at the forge or workshop to craft.</div>`}${recipes}
       <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--ink-dim)">Click gear to equip, ⊟ to salvage · ✦ breaks a Sealed Coffer open (at home) · click an item to use</div>`;
 
     this.pack.querySelectorAll<HTMLElement>(".slot[data-slot]").forEach((el) => {
@@ -762,12 +792,15 @@ export class Hud {
 
   private renderSettlement(world: World): void {
     const cap = capacity(world);
+    // Building + assigning people is done AT the town board, not from the tab.
+    const atBoard = this.near.townboard;
     const rows = (Object.keys(this.content.structures) as StructureId[]).map((id) => {
       const def = this.content.structures[id];
       const level = world.settlement.structures[id];
       const maxed = level >= def.maxLevel;
       const cost = maxed ? null : def.costs[level]!;
       const affordable = !maxed && canBuild(world, this.content, id);
+      const canDo = affordable && atBoard;
       const costStr = cost ? cost.map((c) => `${this.content.items[c.id]!.name} ×${c.qty}`).join(", ") : "—";
       const gicon = { palisade: "shield", forge: "anvil", workshop: "hammer", quarters: "home" }[id];
       return `<div class="srow">
@@ -778,7 +811,7 @@ export class Hud {
           <div style="font-size:11px;color:var(--ink-dim)">${def.blurb}</div>
           ${maxed ? "" : `<div style="font-size:11px;color:${affordable ? "var(--ink-dim)" : "var(--rust)"};margin-top:2px">Cost: ${costStr}</div>`}
         </div>
-        ${maxed ? `<span style="color:var(--amber);font-size:12px">MAX</span>` : `<button class="act" data-build="${id}" ${affordable ? "" : "disabled"} style="opacity:${affordable ? 1 : 0.4}">${level === 0 ? "Build" : "Upgrade"}</button>`}
+        ${maxed ? `<span style="color:var(--amber);font-size:12px">MAX</span>` : `<button class="act" data-build="${id}" ${canDo ? "" : "disabled"} style="opacity:${canDo ? 1 : 0.4}">${level === 0 ? "Build" : "Upgrade"}</button>`}
       </div>`;
     }).join("");
 
@@ -790,15 +823,17 @@ export class Hud {
         <span style="width:20px;height:20px;color:var(--steel);display:inline-block">${glyph(info.glyph)}</span>
         <div style="flex:1"><div style="color:var(--ink)">${info.name}</div><div style="font-size:11px;color:var(--toxic)">${info.effect}</div></div>
         <div style="display:flex;align-items:center;gap:8px">
-          <button class="act rbtn" data-role="${role}" data-delta="-1" style="width:26px;padding:6px 0" ${n > 0 ? "" : "disabled"}>−</button>
+          <button class="act rbtn" data-role="${role}" data-delta="-1" style="width:26px;padding:6px 0" ${atBoard && n > 0 ? "" : "disabled"}>−</button>
           <span style="min-width:16px;text-align:center;color:var(--ink)">${n}</span>
-          <button class="act rbtn" data-role="${role}" data-delta="1" style="width:26px;padding:6px 0" ${idle > 0 ? "" : "disabled"}>+</button>
+          <button class="act rbtn" data-role="${role}" data-delta="1" style="width:26px;padding:6px 0" ${atBoard && idle > 0 ? "" : "disabled"}>+</button>
         </div>
       </div>`;
     }).join("");
 
+    const boardNote = atBoard ? "" : `<div style="text-align:center;font-size:12px;color:var(--rust);margin-bottom:8px">Stand at the town board to build and assign your people.</div>`;
     this.settle.innerHTML =
       `<style>.srow{display:flex;align-items:center;gap:12px;padding:9px 4px;border-bottom:1px solid #1c1e20}</style>
+      ${boardNote}
       <div class="hud-heading">Structures</div>
       ${rows}
       <div class="hud-heading" style="margin-top:12px">Your People — ${idle} idle of ${world.settlement.population}/${cap}</div>
