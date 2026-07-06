@@ -18,7 +18,7 @@ import { Hud, type HudHandlers } from "./client/hud.ts";
 import { Input } from "./client/input.ts";
 import { Fx } from "./client/fx.ts";
 import { audio } from "./client/audio.ts";
-import { loadGame, clearSave } from "./client/save.ts";
+import { loadGame, clearSave, slotInfos, migrateLegacySave, getAccount, setAccount, SAVE_SLOTS, saveGame } from "./client/save.ts";
 
 const canvas = document.getElementById("game") as HTMLCanvasElement | null;
 const hudRoot = document.getElementById("hud") as HTMLElement | null;
@@ -52,11 +52,13 @@ const handlers: HudHandlers = {
   onDecrypt: (i) => gameHandlers?.onDecrypt(i),
 };
 const hud = new Hud(hudRoot, content, handlers);
+hudRoot.style.display = "none"; // stay hidden behind the title until a run begins
 
 /** Build the Game around a chosen world + seed, wire it up, and run. */
-function begin(world: World, seed: number): void {
+function begin(world: World, seed: number, slot: number, name: string): void {
+  hudRoot!.style.display = "";
   const rng = mulberry32(seed);
-  const game = new Game(canvas!, world, content, rng, input, hud, fx, seed);
+  const game = new Game(canvas!, world, content, rng, input, hud, fx, seed, slot, name);
   gameHandlers = game.handlers();
   window.addEventListener("beforeunload", () => game.save());
   audio.unlock();
@@ -65,32 +67,30 @@ function begin(world: World, seed: number): void {
   (window as unknown as Record<string, unknown>)["__ashfall"] = { world, content, audio, game, hud };
 }
 
-// --- Title veil ---
-const saved = loadGame();
+// --- Title + Ironvail character select ---
+migrateLegacySave();
 const seedParam = new URLSearchParams(location.search).get("seed");
 
 const veil = document.createElement("div");
 veil.id = "veil";
 veil.innerHTML = `
   <div class="title">ASHFALL</div>
-  <div class="tagline">A Nord Hold, and the Dead That Keep It</div>
+  <div class="tagline">An Old Hold, and the Dead That Keep It</div>
+  <div class="acct" id="acct"></div>
   <div class="lines" id="veilLines"></div>
-  <div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center">
-    ${saved ? `<button class="start" id="continueBtn">Continue</button>` : ""}
-    <button class="start" id="startBtn" ${saved ? `style="background:#2a2622;color:#c3c6c4"` : ""}>${saved ? "New Game" : "Take Up the Blade"}</button>
-  </div>
-  <div style="font-size:12px;color:#5a5f5a;letter-spacing:.08em;max-width:640px;text-align:center;line-height:1.8">
+  <div class="char-select" id="charSelect"></div>
+  <div class="hint">
     Everything is a click — no keyboard needed. <b>Click</b> to move, fight, search and gather · <b>scroll or pinch</b> to zoom<br/>
-    the tabs on the right open your <b>Pack</b>, <b>Skills</b>, <b>Settlement</b>, <b>Expedition</b> map and <b>Stash</b> from anywhere
+    the tabs on the right open your <b>Pack</b>, <b>Skills</b>, <b>Settlement</b>, <b>Expedition</b> map and <b>Stash</b>
   </div>`;
 app.appendChild(veil);
 
 const LINES = [
-  "The plague came to the hold, and the dead would not lie still. The barrows stand open. The living are few.",
+  "The plague came to the hold, and the dead would not lie still. The tombs stand open. The living are few.",
   "You hold a condemned castle — its curtain wall still stands, its bailey a ruin. Reclaim it stone by stone: forge, workshop, hall.",
   "Basic timber, ore and fish are yours at home, and the means to work them. The richer lodes — and the real gear — lie out in the dark.",
   "Range out by day to gather, fight and loot; be behind your walls before dark. Fall out there, and the wilds keep your unbanked haul.",
-  "Three lords hold the rot together. The Pale Prior. The Barrow King. And at the Rotcradle, the Mother of it all.",
+  "Three lords hold the rot together. The Pale Prior. The Iron King. And at the Rotcradle, the Mother of it all.",
 ];
 const linesEl = veil.querySelector<HTMLElement>("#veilLines")!;
 let li = 1;
@@ -101,22 +101,80 @@ const cycle = () => {
 linesEl.style.transition = "opacity 0.4s ease";
 linesEl.textContent = LINES[0]!;
 const cycleTimer = window.setInterval(cycle, 4200);
-
 audio.setScene("menu");
 
-// Fading it out is cosmetic; stop it blocking clicks on the game underneath
-// (same z-index as modal panels) the instant the fade starts, not 1.2s later.
 const dismiss = () => { clearInterval(cycleTimer); veil.style.opacity = "0"; veil.style.pointerEvents = "none"; window.setTimeout(() => veil.remove(), 1200); };
+const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c] || c));
 
-veil.querySelector<HTMLButtonElement>("#continueBtn")?.addEventListener("click", () => {
-  if (!saved) return;
-  dismiss();
-  begin(saved.world, saved.seed);
-});
+// --- Account line (Ironvail). Local for now; the shape mirrors the shared
+// Ironvail account used across the Varath universe, ready to sync later. ---
+const acctEl = veil.querySelector<HTMLElement>("#acct")!;
+function renderAccount(): void {
+  const email = getAccount();
+  acctEl.innerHTML = email
+    ? `<span class="brand">IRONVAIL</span> · ${esc(email)} <button class="acctlink" id="acctChange">change</button>`
+    : `<span class="brand">IRONVAIL</span> · <button class="acctlink" id="acctChange">link account</button>`;
+  acctEl.querySelector<HTMLButtonElement>("#acctChange")!.onclick = () => {
+    const cur = getAccount();
+    const next = window.prompt("Ironvail account email (shared across the Varath universe):", cur) ?? cur;
+    setAccount(next.trim());
+    renderAccount();
+  };
+}
+renderAccount();
 
-veil.querySelector<HTMLButtonElement>("#startBtn")!.addEventListener("click", () => {
-  clearSave();
+// --- Character slots ---
+function startNew(slot: number, name: string): void {
   const seed = seedParam ? Number(seedParam) >>> 0 : Date.now() >>> 0;
+  const world = createWorld(content, mulberry32(seed));
+  saveGame(world, seed, slot, name); // stamp the slot immediately
   dismiss();
-  begin(createWorld(content, mulberry32(seed)), seed);
-});
+  begin(world, seed, slot, name);
+}
+function continueSlot(slot: number): void {
+  const s = loadGame(slot);
+  if (!s) return;
+  dismiss();
+  begin(s.world, s.seed, slot, s.name);
+}
+
+const selEl = veil.querySelector<HTMLElement>("#charSelect")!;
+function renderSlots(): void {
+  const infos = slotInfos();
+  selEl.innerHTML = `<div class="char-head">Choose your Warden</div><div class="char-slots">${
+    infos.map((info, i) => info
+      ? `<div class="cslot filled" data-continue="${i}">
+           <button class="cdel" data-del="${i}" title="Delete this warden">✕</button>
+           <div class="cname">${esc(info.name)}</div>
+           <div class="csub">Day ${info.day} · Level ${info.level}</div>
+           <div class="cgo">Continue</div>
+         </div>`
+      : `<div class="cslot empty" data-new="${i}">
+           <div class="cplus">+</div>
+           <div class="csub">New Warden</div>
+         </div>`
+    ).join("")
+  }</div>`;
+
+  selEl.querySelectorAll<HTMLElement>("[data-continue]").forEach((el) => {
+    el.onclick = (e) => { if ((e.target as HTMLElement).dataset["del"]) return; continueSlot(Number(el.dataset["continue"])); };
+  });
+  selEl.querySelectorAll<HTMLButtonElement>("[data-del]").forEach((el) => {
+    el.onclick = (e) => { e.stopPropagation(); const i = Number(el.dataset["del"]); if (window.confirm("Permanently delete this warden? This cannot be undone.")) { clearSave(i); renderSlots(); } };
+  });
+  selEl.querySelectorAll<HTMLElement>("[data-new]").forEach((el) => {
+    el.onclick = () => openNewForm(Number(el.dataset["new"]), el);
+  });
+}
+function openNewForm(slot: number, card: HTMLElement): void {
+  card.classList.remove("empty");
+  card.innerHTML = `<input class="cinput" maxlength="18" placeholder="Name your warden" />
+    <button class="cbegin">Take Up the Blade</button>`;
+  const input = card.querySelector<HTMLInputElement>(".cinput")!;
+  const go = () => startNew(slot, (input.value.trim() || "Warden").slice(0, 18));
+  input.focus();
+  input.onkeydown = (e) => { if (e.key === "Enter") go(); };
+  card.querySelector<HTMLButtonElement>(".cbegin")!.onclick = go;
+}
+void SAVE_SLOTS;
+renderSlots();

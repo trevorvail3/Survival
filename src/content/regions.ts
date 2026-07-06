@@ -12,15 +12,15 @@ import type { RegionDef } from "../core/types.ts";
 export const REGIONS: RegionDef[] = [
   {
     id: "woods",
-    name: "Frostpine Wood",
-    blurb: "Sick pine and feverfew under a grey sky. The risen shamble between the boles — few, but they do not tire.",
+    name: "The Greywood",
+    blurb: "Sick trees and feverfew under a grey sky. The risen shamble between the boles — few, but they do not tire.",
     danger: 1,
     treeCount: 22, rockCount: 6, herbCount: 16, chests: 3, survivors: 1,
     enemyMix: ["risen", "risen", "hound"], enemyCount: 12, power: 8, mx: 0.22, my: 0.30,
   },
   {
     id: "abbey",
-    name: "The Ashen Chantry",
+    name: "The Ashen Abbey",
     blurb: "A burned hall of the old faith. Its wretches still keep a vigil no living soul asked for.",
     danger: 2,
     treeCount: 6, rockCount: 14, herbCount: 6, chests: 8, survivors: 2,
@@ -29,7 +29,7 @@ export const REGIONS: RegionDef[] = [
   },
   {
     id: "mire",
-    name: "Reachwater Mire",
+    name: "Blackfen Mire",
     blurb: "Black fen and drowned cairns. Something with too many teeth keeps to the reed-banks.",
     danger: 2,
     treeCount: 10, rockCount: 6, herbCount: 22, chests: 4, survivors: 1,
@@ -37,8 +37,8 @@ export const REGIONS: RegionDef[] = [
   },
   {
     id: "barrows",
-    name: "The Iron Barrows",
-    blurb: "Nord dead laid down with their iron, and risen to keep it. The richest ore — bought in blood.",
+    name: "The Iron Tombs",
+    blurb: "Old knights laid down with their iron, and risen to keep it. The richest ore — bought in blood.",
     danger: 3,
     treeCount: 4, rockCount: 24, herbCount: 4, chests: 5, survivors: 1,
     enemyMix: ["wretch", "revenant", "risen"], enemyCount: 16, power: 42,
