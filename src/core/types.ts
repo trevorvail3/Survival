@@ -337,8 +337,8 @@ export interface World {
   settlement: Settlement;
   /** The settlement storage chest — safe from death, unlike your pack. */
   stash: (InvSlot | null)[];
-  /** Rect of the home settlement (safe zone); night spawns avoid it. Only
-   *  meaningful while `zoneId === "home"`. */
+  /** Rect of the home settlement (a safe zone — no enemies ever spawn there).
+   *  Only meaningful while `zoneId === "home"`. */
   home: { x: number; y: number; w: number; h: number };
   /** The current area: "home" or a region id. */
   zoneId: string;
@@ -355,6 +355,9 @@ export interface World {
   timeOfDay: number;
   day: number;
   clock: number;
+  /** world.clock value at which the hearth may be rested at again — a real-
+   *  time cooldown, not a time-of-day gate (see restAtHearth). */
+  restReadyAt: number;
   nextId: number;
   log: string[];
 }

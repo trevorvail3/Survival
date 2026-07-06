@@ -365,6 +365,7 @@ export function createWorld(content: Content, rng: () => number): World {
     timeOfDay: 0.28,
     day: 1,
     clock: 0,
+    restReadyAt: 0,
     nextId: 1,
     log: [],
   };
@@ -788,11 +789,12 @@ const NODE_SKILL: Partial<Record<Prop["kind"], SkillId>> = {
 
 export function restAtHearth(world: World, content: Content, rng: () => number, out: GameEvent[]): void {
   const p = world.player;
-  // You bed down for the NIGHT — resting is what carries you to dawn. This is
-  // also what stops the hearth being spam-clicked for free heals + tribute:
-  // once you rest it is day again, and you cannot rest until the next night.
-  if (!isNight(world.timeOfDay)) {
-    out.push({ t: "log", msg: "No need to rest yet — the dead come by night." });
+  // Bedding down skips to the next dawn and pays out your settlers' tribute —
+  // available any time of day (day/night at home is atmosphere only, not a
+  // gameplay gate). Throttled by real elapsed playtime instead, so the hearth
+  // can't be spam-clicked for free heals + tribute.
+  if (world.clock < world.restReadyAt) {
+    out.push({ t: "log", msg: "You are not weary enough to rest again yet." });
     return;
   }
   p.hp = p.maxHp;
@@ -800,6 +802,7 @@ export function restAtHearth(world: World, content: Content, rng: () => number, 
   // Sleeping through to dawn: a day passes and your settlers bring their tribute.
   world.timeOfDay = 0.28;
   world.day++;
+  world.restReadyAt = world.clock + DAY_MS;
   deliverTribute(world, content, rng, out);
   out.push({ t: "dayBreak", day: world.day });
 }
