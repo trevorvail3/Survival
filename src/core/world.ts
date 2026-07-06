@@ -782,9 +782,10 @@ export function nearestProp(world: World, maxDist: number): Prop | null {
   return best;
 }
 
-/** Non-searchable stations open UI instead of giving loot. */
+/** Non-searchable stations open UI / act on arrival instead of giving loot.
+ *  Includes the waystone, which the client turns into an extraction on arrival. */
 export function isStation(kind: Prop["kind"]): boolean {
-  return kind === "forge" || kind === "workbench" || kind === "hearth" || kind === "townboard" || kind === "maptable" || kind === "stash" || kind === "gate";
+  return kind === "forge" || kind === "workbench" || kind === "hearth" || kind === "townboard" || kind === "maptable" || kind === "stash" || kind === "gate" || kind === "waystone";
 }
 
 function resolveInteract(world: World, content: Content, ctx: { rng: () => number }, pr: Prop, out: GameEvent[]): void {
