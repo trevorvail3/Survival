@@ -216,6 +216,21 @@ function drawWeapon(g: CanvasRenderingContext2D, R: (u: number) => number, kind:
       g.strokeStyle = "#2a2c2e"; g.lineWidth = R(0.06);
       g.beginPath(); g.moveTo(0, R(0.02)); g.lineTo(0, R(0.12)); g.stroke();
       break;
+    case "dagger":
+      // A short, quick blade.
+      g.strokeStyle = "#d0d3d7"; g.lineWidth = R(0.045);
+      g.beginPath(); g.moveTo(0, R(0.02)); g.lineTo(0, R(-0.22)); g.stroke();
+      g.strokeStyle = "#2a2c2e"; g.lineWidth = R(0.055);
+      g.beginPath(); g.moveTo(0, R(0.04)); g.lineTo(0, R(0.12)); g.stroke();
+      break;
+    case "crossbow": {
+      // A horizontal stock with a short bow across the front.
+      g.strokeStyle = "#5a4028"; g.lineWidth = R(0.055);
+      g.beginPath(); g.moveTo(0, R(0.08)); g.lineTo(0, R(-0.34)); g.stroke();
+      g.strokeStyle = "#7d858c"; g.lineWidth = R(0.04);
+      g.beginPath(); g.moveTo(R(-0.2), R(-0.24)); g.lineTo(R(0.2), R(-0.24)); g.stroke();
+      break;
+    }
     case "axe":
       g.strokeStyle = "#5a4028"; g.lineWidth = R(0.06);
       g.beginPath(); g.moveTo(0, R(0.1)); g.lineTo(0, R(-0.42)); g.stroke();

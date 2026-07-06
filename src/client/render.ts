@@ -503,7 +503,9 @@ function weaponKindOf(world: World, content: Content): WeaponKind {
   return def?.weapon?.kind ?? "fist";
 }
 function armorToneOf(world: World, content: Content): string | null {
-  const def = world.player.armor ? content.items[world.player.armor.id] : undefined;
+  // The avatar's torso tone follows the body piece (the visible chest armour).
+  const body = world.player.armor.body;
+  const def = body ? content.items[body.id] : undefined;
   if (!def) return null;
   return ARMOR_TONE[def.material ?? ""] ?? "#8a9096";
 }

@@ -82,7 +82,7 @@ export interface ItemDef {
   use: ItemUse;
   weapon?: WeaponDef;
   armor?: number; // damage soaked per hit when equipped as armour
-  slot?: "weapon" | "body"; // equip slot
+  slot?: EquipSlot; // equip slot: "weapon" or one of the armour slots
   heal?: number;
   cure?: number; // infection removed
   throwDamage?: number;
@@ -95,15 +95,25 @@ export interface ItemDef {
   desc: string;
 }
 
-export type WeaponKind = "fist" | "blade" | "blunt" | "axe" | "spear" | "bow";
+export type WeaponKind = "fist" | "blade" | "dagger" | "blunt" | "axe" | "spear" | "bow" | "crossbow";
 
 export interface WeaponDef {
   kind: WeaponKind;
   damage: number;
   reach: number; // tiles; bows reach far
   cooldown: number; // ms between blows (attack speed)
-  ammo?: ItemId; // bows consume arrows
+  ammo?: ItemId; // ranged weapons consume ammo (arrows / bolts). Presence = ranged.
+  /** Flat enemy-armour ignored on a hit (maces, axes, crossbows pierce armour). */
+  armorPen?: number;
+  /** Added to crit chance (daggers/rapiers fish for crits). */
+  crit?: number;
+  /** This weapon cleaves nearby foes on every swing (great weapons, polearms). */
+  cleave?: boolean;
 }
+
+/** Equipment slots. One weapon (main hand) + five armour slots. */
+export type ArmorSlot = "head" | "body" | "hands" | "legs" | "feet";
+export type EquipSlot = "weapon" | ArmorSlot;
 
 export interface InvSlot {
   id: ItemId;
@@ -232,7 +242,8 @@ export interface Player {
   order: PlayerOrder;
   inv: (InvSlot | null)[]; // the pack you carry (lost if you fall)
   equipped: InvSlot | null; // equipped weapon instance (rolled Power/rarity)
-  armor: InvSlot | null; // equipped body armour instance
+  /** Equipped armour, one instance per slot (head/body/hands/legs/feet). */
+  armor: Record<ArmorSlot, InvSlot | null>;
   nextAttack: number;
   infection: number;
   alive: boolean;

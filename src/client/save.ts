@@ -43,6 +43,13 @@ export function loadGame(): { seed: number; world: World } | null {
     // equipped/armor became gear instances (were bare item ids).
     if (typeof pl["equipped"] === "string") pl["equipped"] = { id: pl["equipped"], qty: 1 };
     if (typeof pl["armor"] === "string") pl["armor"] = { id: pl["armor"], qty: 1 };
+    // armor went from a single body instance to a per-slot map. Migrate an old
+    // single piece into the body slot; leave the rest empty.
+    const armor = pl["armor"] as unknown;
+    if (!armor || typeof armor !== "object" || !("body" in (armor as object))) {
+      const old = armor && typeof armor === "object" && "id" in (armor as object) ? (armor as Record<string, unknown>) : null;
+      pl["armor"] = { head: null, body: old, hands: null, legs: null, feet: null };
+    }
     const w = blob.world as unknown as Record<string, unknown>;
     if (typeof w["won"] !== "boolean") w["won"] = false;
     if (!Array.isArray(w["stash"])) w["stash"] = new Array(48).fill(null);

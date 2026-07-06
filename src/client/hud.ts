@@ -15,7 +15,7 @@ import { itemIconSVG } from "./itemIcon.ts";
 import { canBuild, canCraft, canSpendSkill, capacity, dismantleYield, idleSettlers, INV_COLS, isNight } from "../core/world.ts";
 import { SKILLS, TREE_NAMES, pointsInTree, xpForNext, nodeUnlocked, type SkillTree } from "../content/skills.ts";
 import { SKILL_META, SKILL_GROUPS, SKILL_IDS, MAX_SKILL, levelForXp, levelProgress, type SkillId } from "../content/trainskills.ts";
-import { RARITY_META, rarityOf, slotPower, characterPower, weaponDamage, armorSoak } from "../content/gear.ts";
+import { RARITY_META, rarityOf, slotPower, characterPower, weaponDamage, armorSoak, isGearDef, ARMOR_SLOTS } from "../content/gear.ts";
 import { drawMinimap } from "./render.ts";
 import { audio } from "./audio.ts";
 
@@ -48,6 +48,28 @@ const ROLE_INFO: Record<SettlerRole, { name: string; glyph: string; effect: stri
 };
 
 export const HOTBAR: ItemId[] = ["poultice", "bread", "waterskin", "firebomb", "antidote"];
+
+/** Human labels for equip slots (loadout + inspect cards). */
+const SLOT_LABEL: Record<string, string> = {
+  weapon: "Weapon", head: "Head", body: "Body", hands: "Hands", legs: "Legs", feet: "Feet",
+};
+
+/** Describe a weapon's feel from its stats: attack speed, reach, and any
+ *  armour-pen / crit / cleave traits — so each type reads as distinct. */
+function weaponStatLines(_name: string, dmg: number, w: import("../core/types.ts").WeaponDef): string[] {
+  const lines: string[] = [];
+  const speed = w.cooldown <= 700 ? "Very fast" : w.cooldown <= 950 ? "Fast" : w.cooldown <= 1200 ? "Average" : w.cooldown <= 1400 ? "Slow" : "Very slow";
+  const dps = Math.round((dmg * 1000) / w.cooldown);
+  lines.push(`Damage ${dmg} · ${speed} (~${dps}/s)`);
+  const traits: string[] = [];
+  if (w.ammo) traits.push(`Ranged ${w.reach.toFixed(0)} tiles`);
+  else if (w.reach >= 2) traits.push(`Reach ${w.reach.toFixed(1)}`);
+  if (w.armorPen) traits.push(`Armour-pierce ${w.armorPen}`);
+  if (w.crit) traits.push(`+${Math.round(w.crit * 100)}% crit`);
+  if (w.cleave) traits.push("Cleaves");
+  if (traits.length) lines.push(`<span style="color:var(--toxic)">${traits.join(" · ")}</span>`);
+  return lines;
+}
 
 type NearStations = { forge: boolean; workshop: boolean };
 
@@ -294,14 +316,19 @@ export class Hud {
   private inspectHTML(s: InvSlot): string {
     const def = this.content.items[s.id];
     if (!def) return "";
-    const gear = !!(def.weapon || def.slot === "body");
+    const gear = isGearDef(def);
     const stat: string[] = [];
     let head: string;
     if (gear) {
       const rm = RARITY_META[rarityOf(s)];
       head = `<span style="color:${rm.color};font-family:'Cinzel',serif">${rm.name} ${def.name}</span>`;
       stat.push(`<span style="color:var(--amber)">◈ Power ${slotPower(s)}</span>`);
-      stat.push(def.weapon ? `Damage ${weaponDamage(def, s)}` : `Armour ${armorSoak(def, s)}`);
+      if (def.weapon) {
+        const w = def.weapon;
+        stat.push(...weaponStatLines(def.name, weaponDamage(def, s), w));
+      } else {
+        stat.push(`Armour ${armorSoak(def, s)} · ${SLOT_LABEL[def.slot ?? "body"] ?? def.slot}`);
+      }
       const y = dismantleYield(this.content, s, false);
       stat.push(`<span style="color:var(--ink-dim)">Salvage → ${y.qty} ${this.content.items[y.id]?.name ?? y.id} (2× at base)</span>`);
     } else {
@@ -407,7 +434,7 @@ export class Hud {
         ${p.points > 0 ? `<span style="font-size:11px;color:var(--amber);white-space:nowrap">+${p.points} pt${p.points > 1 ? "s" : ""}</span>` : ""}
       </div>` +
       `<div style="display:flex;align-items:center;gap:6px;margin-top:5px;font-size:12px">
-        <span style="color:var(--amber);font-family:'Cinzel',serif">◈ Power ${characterPower(p.equipped, p.armor)}</span>
+        <span style="color:var(--amber);font-family:'Cinzel',serif">◈ Power ${characterPower(p.equipped, ARMOR_SLOTS.map((s) => p.armor[s]))}</span>
         ${world.zoneId !== "home" ? `<span style="color:var(--ink-dim);font-size:11px">/ rec. ${this.content.regions.find((r) => r.id === world.zoneId)?.power ?? 0}</span>` : ""}
       </div>`;
 
@@ -612,7 +639,7 @@ export class Hud {
     }).join("");
 
     // Region pins.
-    const myPow = characterPower(world.player.equipped, world.player.armor);
+    const myPow = characterPower(world.player.equipped, ARMOR_SLOTS.map((s) => world.player.armor[s]));
     const pins = this.content.regions.map((r) => {
       const px = r.mx * W, py = r.my * H;
       const here = world.zoneId === r.id;
@@ -665,7 +692,7 @@ export class Hud {
     const slots = p.inv.map((s, i) => {
       if (!s) return `<div class="slot empty"></div>`;
       const def = this.content.items[s.id]!;
-      const gear = !!(def.weapon || def.slot === "body");
+      const gear = isGearDef(def);
       const coffer = s.id === "coffer";
       // Coffers show their guaranteed rarity FLOOR (its border + "+" tag); gear
       // shows its rolled rarity + Power.
@@ -681,21 +708,31 @@ export class Hud {
       </div>`;
     }).join("");
 
-    // Loadout: equipped weapon + body with rarity + Power, and your gear score.
-    const loadoutCell = (slot: typeof p.equipped, fallback: string): string => {
-      if (!slot) return `<div style="flex:1;color:var(--ink-dim);font-size:12px;padding:6px 8px">— ${fallback} —</div>`;
+    // Loadout: equipped weapon + the five armour slots, each with rarity/Power,
+    // plus your gear score (the average Power of what you have equipped).
+    const loadoutCell = (slot: InvSlot | null, label: string): string => {
+      if (!slot) return `<div class="ld empty" title="${label}: empty"><div class="ldslot">${label}</div><div style="color:var(--ink-dim);font-size:11px">— empty —</div></div>`;
       const def = this.content.items[slot.id]!;
       const col = RARITY_META[rarityOf(slot)].color;
-      return `<div style="flex:1;display:flex;align-items:center;gap:8px;padding:5px 7px;background:#101112;border:1px solid ${col};border-radius:3px">
-        <div style="width:30px;height:30px">${itemIconSVG(def)}</div>
-        <div style="min-width:0"><div style="color:${col};font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${RARITY_META[rarityOf(slot)].name} ${def.name}</div>
-        <div style="font-size:11px;color:var(--ink-dim)">◈ Power ${slotPower(slot)}</div></div>
+      return `<div class="ld" title="${gearTip(def, slot)}" style="border-color:${col}">
+        <div style="width:26px;height:26px;flex:none">${itemIconSVG(def)}</div>
+        <div style="min-width:0"><div style="color:${col};font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${def.name}</div>
+        <div style="font-size:10px;color:var(--ink-dim)">${label} · ◈${slotPower(slot)}</div></div>
       </div>`;
     };
-    const power = characterPower(p.equipped, p.armor);
+    const power = characterPower(p.equipped, ARMOR_SLOTS.map((sl) => p.armor[sl]));
     const loadout =
-      `<div class="hud-heading">Loadout <span style="color:var(--amber);text-transform:none;letter-spacing:0">· ◈ Power ${power}</span></div>
-       <div style="display:flex;gap:8px;margin-bottom:12px">${loadoutCell(p.equipped, "no weapon")}${loadoutCell(p.armor, "no armour")}</div>`;
+      `<style>
+        #hud-loadout{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px}
+        #hud-loadout .ld{display:flex;align-items:center;gap:7px;padding:5px 7px;background:#101112;border:1px solid #2a2c2e;border-radius:3px;min-width:0}
+        #hud-loadout .ld.empty{opacity:.55}
+        #hud-loadout .ldslot{font-size:11px;color:var(--ink-dim)}
+      </style>
+      <div class="hud-heading">Loadout <span style="color:var(--amber);text-transform:none;letter-spacing:0">· ◈ Power ${power}</span></div>
+       <div id="hud-loadout">
+         ${loadoutCell(p.equipped, "Weapon")}
+         ${ARMOR_SLOTS.map((sl) => loadoutCell(p.armor[sl], SLOT_LABEL[sl]!)).join("")}
+       </div>`;
 
     const s = world.settlement.structures;
     const recipes = this.content.recipes.map((r) => {
@@ -814,7 +851,7 @@ function ico(name: string): string {
 }
 /** Tooltip for a slot — gear shows its rarity, Power and stats. */
 function gearTip(def: ItemDef, s: InvSlot): string {
-  if (!(def.weapon || def.slot === "body")) return `${def.name} — ${def.desc}`;
-  const stat = def.weapon ? `Dmg ${weaponDamage(def, s)}` : `Armour ${armorSoak(def, s)}`;
+  if (!isGearDef(def)) return `${def.name} — ${def.desc}`;
+  const stat = def.weapon ? `Dmg ${weaponDamage(def, s)}` : `Armour ${armorSoak(def, s)} · ${SLOT_LABEL[def.slot ?? ""] ?? ""}`;
   return `${RARITY_META[rarityOf(s)].name} ${def.name} · ◈Power ${slotPower(s)} · ${stat} — ${def.desc}`;
 }
