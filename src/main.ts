@@ -50,6 +50,7 @@ const handlers: HudHandlers = {
   onToggleTravel: () => gameHandlers?.onToggleTravel(),
   onToggleStash: () => gameHandlers?.onToggleStash(),
   onDismantle: (i) => gameHandlers?.onDismantle(i),
+  onDecrypt: (i) => gameHandlers?.onDecrypt(i),
 };
 const hud = new Hud(hudRoot, content, handlers);
 

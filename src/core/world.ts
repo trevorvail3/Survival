@@ -80,7 +80,9 @@ export type GameEvent =
   | { t: "recruit" }
   | { t: "levelUp"; level: number }
   | { t: "skillup"; skill: string; level: number }
-  | { t: "drop"; id: ItemId; rarity: string; power: number; guaranteed: boolean }
+  | { t: "drop"; id: ItemId; rarity: string; power: number }
+  | { t: "coffer"; rarity: string } // a sealed coffer dropped (its floor rarity)
+  | { t: "decrypt"; id: ItemId; rarity: string; power: number } // a coffer's seal broken
   | { t: "salvage"; id: ItemId; qty: number }
   | { t: "victory" }
   | { t: "heal" }
@@ -634,15 +636,20 @@ function damageEnemy(world: World, content: Content, ctx: { rng: () => number },
     const table = e.boss ? `kill_${e.kind}` : e.kind === "revenant" ? "kill_revenant" : "kill_common";
     for (const d of rollLoot(ctx.rng, table)) spawnGround(world, d.id, d.qty, e.pos.x, e.pos.y);
     if (e.boss) {
-      // The raid payoff: every boss kill guarantees one drop at or above a
-      // rarity floor set by the region's danger — this, not per-kill RNG, is
-      // the main reason to run an expedition. A second, normally-rolled drop
-      // rides along for variety. Bosses respawn on every fresh visit (see
-      // travelTo), so this is a repeatable run-it-back loop, not a one-off.
+      // The raid payoff: every boss kill guarantees a SEALED COFFER at or above
+      // a rarity floor set by the region's danger — you carry it home and break
+      // its seal to reveal the gear (see spawnCoffer / decryptCoffer). This, not
+      // per-kill RNG, is the main reason to run an expedition. A second,
+      // normally-rolled drop reveals on the spot for variety. Bosses respawn on
+      // every fresh visit (see travelTo), so this is a repeatable run-it-back
+      // loop, not a one-off.
       const danger = regionById(world.zoneId)?.danger ?? 1;
       const floor: Rarity = danger >= 4 ? "legendary" : danger >= 3 ? "epic" : danger >= 2 ? "rare" : "uncommon";
-      spawnGearDrop(world, content, ctx, e.pos.x, e.pos.y, out, floor);
+      spawnCoffer(world, ctx, e.pos.x, e.pos.y, floor, out);
       spawnGearDrop(world, content, ctx, e.pos.x, e.pos.y, out);
+      // The way out opens where the warden fell — an extraction point right
+      // here, so you needn't fight all the way back to leave with your haul.
+      openExtraction(world, e.pos.x, e.pos.y, out);
       if (!world.bossesSlain.includes(e.kind)) world.bossesSlain.push(e.kind);
       out.push({ t: "log", msg: `${content.enemies[e.kind].name} falls. Its hoard is yours.` });
       if (e.kind === "rotmother" && !world.won) { world.won = true; out.push({ t: "victory" }); }
@@ -671,18 +678,62 @@ function gearPool(content: Content): ItemId[] {
   return gearPoolCache;
 }
 
-/** Drop a rolled gear instance (rarity + Power) around the region's power band.
- *  `minRarity` guarantees at least that rarity (the boss raid-cache floor). */
-function spawnGearDrop(world: World, content: Content, ctx: { rng: () => number }, x: number, y: number, out: GameEvent[], minRarity?: Rarity): void {
+/** Drop a rolled gear instance (rarity + Power) around the region's power band. */
+function spawnGearDrop(world: World, content: Content, ctx: { rng: () => number }, x: number, y: number, out: GameEvent[]): void {
   const pool = gearPool(content);
   if (pool.length === 0) return;
   const id = pick(ctx.rng, pool);
   const danger = world.zoneId === "home" ? 1 : regionById(world.zoneId)?.danger ?? 1;
-  const rarity: Rarity = rollRarity(ctx.rng, danger, minRarity);
+  const rarity: Rarity = rollRarity(ctx.rng, danger);
   const band = regionRecommendedPower(world) || 6;
   const power = rollPower(ctx.rng, band, rarity);
   world.ground.push({ id: world.nextId++, item: { id, qty: 1, power, rarity }, pos: { x: x + (world.nextId % 5) * 0.05 - 0.12, y: y + (world.nextId % 3) * 0.05 } });
-  out.push({ t: "drop", id, rarity, power, guaranteed: !!minRarity });
+  out.push({ t: "drop", id, rarity, power });
+}
+
+/** Drop a sealed coffer — the guaranteed boss payoff. It stores its rarity
+ *  FLOOR (rarity) and the region's power BAND (power) on the instance; the real
+ *  gear is only rolled when the seal is broken at the settlement (decryptCoffer),
+ *  so the coffer is a stake you must carry home to cash in. */
+function spawnCoffer(world: World, ctx: { rng: () => number }, x: number, y: number, floor: Rarity, out: GameEvent[]): void {
+  const band = regionRecommendedPower(world) || 6;
+  world.ground.push({ id: world.nextId++, item: { id: "coffer", qty: 1, power: band, rarity: floor }, pos: { x: x + (world.nextId % 5) * 0.05 - 0.12, y: y + (world.nextId % 3) * 0.05 } });
+  void ctx;
+  out.push({ t: "coffer", rarity: floor });
+}
+
+/** Break a sealed coffer, revealing (rolling) the gear it holds. Only at the
+ *  settlement — you have to haul it home, which ties the coffer into the
+ *  extraction stake (die in the wilds, lose the unopened coffer). */
+export function decryptCoffer(world: World, content: Content, ctx: { rng: () => number }, slotIndex: number, out: GameEvent[]): boolean {
+  if (world.zoneId !== "home") { out.push({ t: "log", msg: "The seal only yields at your settlement. Carry it home." }); return false; }
+  const p = world.player;
+  const slot = p.inv[slotIndex];
+  if (!slot || slot.id !== "coffer") return false;
+  const pool = gearPool(content);
+  if (pool.length === 0) return false;
+  const floor = (slot.rarity as Rarity) ?? "uncommon";
+  const band = slot.power ?? 6;
+  const id = pick(ctx.rng, pool);
+  // Tilt the roll toward the coffer's own tier (not home's danger of 1), with
+  // the floor guaranteeing it never comes back worse than promised.
+  const rarity: Rarity = rollRarity(ctx.rng, RARITIES.indexOf(floor) + 1, floor);
+  const power = rollPower(ctx.rng, band, rarity);
+  p.inv[slotIndex] = null;
+  placeInstance(world, { id, qty: 1, power, rarity });
+  out.push({ t: "decrypt", id, rarity, power });
+  return true;
+}
+
+/** Reveal an extraction point (a waystone) at a spot — the "way out" a boss
+ *  kill opens. Props carry their own id space, so mint an id past the current
+ *  max rather than reusing world.nextId (which counts enemies/ground). */
+function openExtraction(world: World, x: number, y: number, out: GameEvent[]): void {
+  const tx = Math.round(x), ty = Math.round(y);
+  if (world.props.some((pr) => pr.kind === "waystone" && pr.pos.x === tx && pr.pos.y === ty)) return;
+  const id = world.props.reduce((m, pr) => Math.max(m, pr.id), 0) + 1;
+  world.props.push({ id, kind: "waystone", pos: { x: tx, y: ty }, used: false });
+  out.push({ t: "log", msg: "A way out opens where the warden fell." });
 }
 
 function attackPlayer(world: World, content: Content, e: Enemy, out: GameEvent[]): void {

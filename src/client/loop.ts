@@ -13,6 +13,7 @@ import {
   assignRole,
   build,
   craft,
+  decryptCoffer,
   dismantle,
   dodge,
   isStation,
@@ -123,7 +124,10 @@ export class Game {
       if (pr && Math.hypot(pr.pos.x + 0.5 - p.pos.x, pr.pos.y + 0.5 - p.pos.y) < 1.8) {
         if (pr.kind === "hearth") { restAtHearth(world, this.content, this.rng, this.events); this.dispatch(this.events, now); this.events.length = 0; }
         else if (pr.kind === "townboard") { this.hud.openSettlement(); this.tut("board"); }
-        else if (pr.kind === "waystone" || pr.kind === "maptable") this.hud.openTravel();
+        else if (pr.kind === "maptable") this.hud.openTravel();
+        // A waystone in the field IS the extraction point: reach it and you
+        // leave with your haul. No warp-home button — you walk to a way out.
+        else if (pr.kind === "waystone") { if (world.zoneId === "home") this.hud.openTravel(); else this.travel("home", true); }
         else if (pr.kind === "stash") this.hud.openStash();
         else if (pr.kind === "forge" || pr.kind === "workbench") { this.hud.openPack(); this.tut("pack"); }
       }
@@ -229,7 +233,7 @@ export class Game {
     const LABELS: Partial<Record<string, string>> = {
       chest: "Search chest", crate: "Search crate", barrel: "Search barrel", remains: "Search remains", cart: "Search wreck",
       tree: "Fell timber", rock: "Mine stone", herbs: "Gather herbs", fishpool: "Fish the water", survivor: "Rescue survivor",
-      forge: "Work the forge", workbench: "Use the workshop", hearth: "Rest until dawn", townboard: "Muster the settlement", waystone: "Read the waystone", maptable: "Study the war map", stash: "Open storage",
+      forge: "Work the forge", workbench: "Use the workshop", hearth: "Rest until dawn", townboard: "Muster the settlement", waystone: "Extract — leave with your haul", maptable: "Study the war map", stash: "Open storage",
     };
     const CONSUMED = new Set(["chest", "crate", "barrel", "remains", "cart", "survivor", "tree", "rock", "herbs", "fishpool"]);
     let pd = 0.8; let label: string | null = null;
@@ -282,26 +286,33 @@ export class Game {
       onToggleTravel: () => { this.hud.toggleTravel(); audio.play("click"); },
       onToggleStash: () => { this.hud.toggleStash(); audio.play("click"); },
       onDismantle: (i: number) => { const ev: GameEvent[] = []; if (dismantle(this.world, this.content, i, ev)) this.dispatch(ev, performance.now()); },
-      onTravel: (regionId: string) => {
-        const fromHome = this.world.zoneId === "home";
-        const ev: GameEvent[] = [];
-        if (travelTo(this.world, this.content, this.rng, regionId, ev)) {
-          this.tut("travel");
-          this.bossHailed.clear(); // a fresh region — its lord may be hailed again
-          this.hud.closeAll();
-          this.snapCamera();
-          audio.setScene(regionId === "home" ? (isNight(this.world.timeOfDay) ? "night" : "day") : (regionId as SceneKey));
-          const name = regionId === "home" ? "Your Settlement" : (this.content.regions.find((r) => r.id === regionId)?.name ?? "the wilds");
-          this.hud.showBanner(name, regionId === "home" ? "Home again." : "Watch the light.", 1800);
-          this.dispatch(ev, performance.now());
-          // Extraction nudge: heading out heavy means a fall costs you the haul.
-          if (regionId !== "home" && fromHome && !this.bankTipShown) {
-            const carried = this.world.player.inv.filter(Boolean).length;
-            if (carried >= 5) { this.hud.tip("Fall out here and you lose your <b>pack</b> — bank your haul at the <b>stash</b> before a risky run."); this.bankTipShown = true; }
-          }
-        }
-      },
+      onTravel: (regionId: string) => { this.travel(regionId, false); },
+      onDecrypt: (i: number) => { const ev: GameEvent[] = []; if (decryptCoffer(this.world, this.content, { rng: this.rng }, i, ev)) this.dispatch(ev, performance.now()); },
     };
+  }
+
+  /** Move between zones. `extracted` marks a field→home trip made by reaching a
+   *  waystone (vs. setting out from home, or the map's own travel), so the
+   *  banner reads as a successful extraction. */
+  private travel(regionId: string, extracted: boolean): void {
+    const fromHome = this.world.zoneId === "home";
+    const ev: GameEvent[] = [];
+    if (travelTo(this.world, this.content, this.rng, regionId, ev)) {
+      this.tut("travel");
+      this.bossHailed.clear(); // a fresh region — its lord may be hailed again
+      this.hud.closeAll();
+      this.snapCamera();
+      audio.setScene(regionId === "home" ? (isNight(this.world.timeOfDay) ? "night" : "day") : (regionId as SceneKey));
+      const name = regionId === "home" ? (extracted ? "Extracted" : "Your Settlement") : (this.content.regions.find((r) => r.id === regionId)?.name ?? "the wilds");
+      const sub = regionId === "home" ? (extracted ? "You made it back with your haul." : "Home again.") : "Watch the light.";
+      this.hud.showBanner(name, sub, 1800);
+      this.dispatch(ev, performance.now());
+      // Extraction nudge: heading out heavy means a fall costs you the haul.
+      if (regionId !== "home" && fromHome && !this.bankTipShown) {
+        const carried = this.world.player.inv.filter(Boolean).length;
+        if (carried >= 5) { this.hud.tip("Fall out here and you lose your <b>pack</b> — bank your haul at the <b>stash</b> before a risky run."); this.bankTipShown = true; }
+      }
+    }
   }
 
   private snapCamera(): void {
@@ -342,13 +353,24 @@ export class Game {
         case "drop": {
           const rm = RARITY_META[e.rarity as Rarity]; const nm = this.content.items[e.id]?.name ?? e.id;
           this.hud.pushLog(`Dropped: <span style="color:${rm?.color ?? "#ccc"}">${rm?.name ?? ""} ${nm}</span> ◈${e.power}`);
-          if (e.guaranteed) {
-            // The raid payoff — always a banner moment, whatever the rarity.
-            audio.play("levelup"); audio.sting();
-            this.hud.showBanner("Raid Cache", `<span style="color:${rm.color}">${rm.name}</span> ${nm} — ◈${e.power}`, 3600);
-          } else if (e.rarity === "epic" || e.rarity === "legendary") {
+          if (e.rarity === "epic" || e.rarity === "legendary") {
             audio.play("levelup"); this.hud.tip(`<span style="color:${rm.color}">${rm.name}</span> drop — <b>${nm}</b> ◈${e.power}`);
           }
+          break;
+        }
+        case "coffer": {
+          // The raid payoff: a sealed coffer to haul home and break open.
+          const rm = RARITY_META[e.rarity as Rarity];
+          audio.play("levelup"); audio.sting();
+          this.hud.showBanner("Sealed Coffer", `A warden's hoard, sealed — <span style="color:${rm.color}">${rm.name}+</span>. Carry it home and break the seal.`, 3800);
+          this.hud.pushLog(`A <span style="color:${rm.color}">Sealed Coffer (${rm.name}+)</span> falls — take it home to open it.`);
+          break;
+        }
+        case "decrypt": {
+          const rm = RARITY_META[e.rarity as Rarity]; const nm = this.content.items[e.id]?.name ?? e.id;
+          audio.play("levelup"); audio.sting();
+          this.hud.showBanner("The Seal Breaks", `<span style="color:${rm.color}">${rm.name}</span> ${nm} — ◈${e.power}`, 3600);
+          this.hud.pushLog(`The coffer yields: <span style="color:${rm.color}">${rm.name} ${nm}</span> ◈${e.power}.`);
           break;
         }
         case "salvage": audio.play("craft"); this.hud.pushLog(`Salvaged into ${e.qty}× ${this.content.items[e.id]?.name ?? e.id}.`); break;
