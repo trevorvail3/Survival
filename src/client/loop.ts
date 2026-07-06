@@ -75,6 +75,8 @@ export class Game {
     private hud: Hud,
     private fx: Fx,
     private seed: number,
+    private slot: number,
+    private charName: string,
   ) {
     this.g = canvas.getContext("2d")!;
     this.tutorial = new Tutorial(world);
@@ -175,11 +177,11 @@ export class Game {
     this.input.endFrame();
 
     // Autosave the run every few seconds while alive.
-    if (p.alive && now - this.lastSave > 4000) { saveGame(world, this.seed); this.lastSave = now; }
+    if (p.alive && now - this.lastSave > 4000) { saveGame(world, this.seed, this.slot, this.charName); this.lastSave = now; }
   }
 
   /** Persist now (e.g. on tab close), unless the run is already over. */
-  save(): void { if (this.world.player.alive) saveGame(this.world, this.seed); }
+  save(): void { if (this.world.player.alive) saveGame(this.world, this.seed, this.slot, this.charName); }
 
   /** Feed a signal to the tutorial and toast anything it returns. */
   private tut(sig: string): void {

@@ -101,7 +101,7 @@ export const LOOT: Record<string, LootEntry[]> = {
     { id: "leather", chance: 0.6, min: 1, max: 2 },
     { id: "poultice", chance: 0.5, min: 1, max: 2 },
   ],
-  // The Barrow King — a hoard, and the makings of the finest gear.
+  // The Iron King — a hoard, and the makings of the finest gear.
   kill_graveking: [
     { id: "iron", chance: 1, min: 12, max: 20 },
     { id: "leather", chance: 1, min: 4, max: 8 },

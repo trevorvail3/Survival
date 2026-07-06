@@ -1,7 +1,7 @@
 /**
  * src/content/skills.ts
  * ---------------------
- * Character progression: three skill constellations, Skyrim/Cyberpunk style.
+ * Character progression: three branching skill constellations.
  * Each node sits at a position in its tree and is unlocked by its prerequisite
  * node(s) — you follow branching chains from a root to the capstones. The trees
  * are wide enough to support distinct builds: a fast-crit or low-health

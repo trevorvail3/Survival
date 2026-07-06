@@ -196,3 +196,123 @@ button.act:active {
   0%, 100% { opacity: 0.85; }
   50% { opacity: 1; box-shadow: 0 0 24px rgba(194, 59, 44, 0.5); }
 }
+
+/* Ironvail account line on the title. */
+#veil .acct {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--ink-dim);
+  margin-top: -6px;
+}
+#veil .acct .brand {
+  font-family: "Cinzel", serif;
+  letter-spacing: 0.28em;
+  color: var(--amber);
+}
+#veil .acctlink {
+  background: none;
+  border: none;
+  color: var(--ink);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+#veil .acctlink:hover { color: #fff; }
+
+/* Character select — three warden slots. */
+#veil .char-head {
+  font-family: "Cinzel", serif;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  text-align: center;
+  margin-bottom: 10px;
+}
+#veil .char-slots {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+#veil .cslot {
+  position: relative;
+  width: 190px;
+  min-height: 120px;
+  background: #121316;
+  border: 1px solid var(--panel-edge);
+  border-radius: 6px;
+  padding: 16px 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+#veil .cslot:hover { border-color: var(--amber); background: #17191c; }
+#veil .cslot.empty { opacity: 0.75; }
+#veil .cslot .cname {
+  font-family: "Cinzel", serif;
+  font-size: 18px;
+  color: #e6dcc4;
+}
+#veil .cslot .csub { font-size: 12px; color: var(--ink-dim); letter-spacing: 0.04em; }
+#veil .cslot .cgo {
+  margin-top: 6px;
+  font-family: "Cinzel", serif;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+#veil .cslot .cplus { font-size: 34px; color: var(--ink-dim); line-height: 1; }
+#veil .cslot .cdel {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--panel-edge);
+  border-radius: 50%;
+  background: #17191a;
+  color: var(--ink-dim);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+#veil .cslot .cdel:hover { border-color: var(--rust); color: #fff; }
+#veil .cslot .cinput {
+  width: 100%;
+  background: #0c0d0e;
+  border: 1px solid var(--panel-edge);
+  border-radius: 4px;
+  padding: 8px 10px;
+  color: var(--ink);
+  font-size: 14px;
+  text-align: center;
+}
+#veil .cslot .cbegin {
+  width: 100%;
+  font-family: "Cinzel", serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 12px;
+  color: #0a0b0c;
+  background: var(--blood);
+  border: none;
+  border-radius: 4px;
+  padding: 10px;
+  cursor: pointer;
+}
+#veil .hint {
+  font-size: 12px;
+  color: #5a5f5a;
+  letter-spacing: 0.08em;
+  max-width: 640px;
+  text-align: center;
+  line-height: 1.8;
+}

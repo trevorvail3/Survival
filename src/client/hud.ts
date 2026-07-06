@@ -643,7 +643,7 @@ export class Hud {
       const sub = locked ? `<tspan fill="#7a6b4a">sealed</tspan>` : cleansed ? `<tspan fill="#e6b24e">cleansed</tspan>` : `<tspan fill="${dcol}">${skulls(r.danger)}</tspan>${powTag}${here ? " · here" : ""}`;
       const clickable = atHome && this.near.maptable && !locked;
       return `<g ${clickable ? `data-travel="${r.id}"` : ""} style="cursor:${clickable ? "pointer" : "default"};opacity:${locked ? 0.7 : 1}">
-        <title>${r.name} — ${locked ? "Slay both the Barrow King and the Pale Prior to unlock." : r.blurb}</title>
+        <title>${r.name} — ${locked ? "Slay both the Iron King and the Pale Prior to unlock." : r.blurb}</title>
         <circle cx="${px}" cy="${py}" r="${here ? 11 : 9}" fill="${fill}" stroke="${stroke}" stroke-width="2.5"/>
         ${locked ? `<text x="${px}" y="${py + 4}" text-anchor="middle" font-size="11" fill="#c8922e">🔒</text>` : ""}
         <text x="${lx}" y="${py - 2}" text-anchor="${anchor}" font-size="13" font-family="Cinzel, serif" fill="#e6dcc4">${r.name}</text>
