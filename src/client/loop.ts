@@ -272,13 +272,13 @@ export class Game {
     return {
       onCraft: (recipeId: string) => { const ev: GameEvent[] = []; if (craft(this.world, this.content, recipeId, ev)) this.dispatch(ev, performance.now()); },
       onBuild: (id: StructureId) => { const ev: GameEvent[] = []; if (build(this.world, this.content, id, ev)) this.dispatch(ev, performance.now()); },
-      onAssign: (role: SettlerRole, delta: number) => { assignRole(this.world, role, delta); },
+      onAssign: (role: SettlerRole, delta: number) => { assignRole(this.world, role, delta); this.hud.markDirty(); },
       onEquip: (id: ItemId) => { const ev: GameEvent[] = []; useSlotById(this.world, this.content, id, ev); this.dispatch(ev, performance.now()); },
       onUseSlot: (i: number) => { const ev: GameEvent[] = []; useSlot(this.world, this.content, i, ev); this.dispatch(ev, performance.now()); },
       onSkipTutorial: () => { this.tutorial.skip(); this.hud.setTask(null); },
-      onSpendSkill: (nodeId: string) => { spendSkill(this.world, nodeId); },
-      onStore: (i: number) => { storeToStash(this.world, this.content, i); },
-      onTake: (i: number) => { takeFromStash(this.world, this.content, i); },
+      onSpendSkill: (nodeId: string) => { spendSkill(this.world, nodeId); this.hud.markDirty(); },
+      onStore: (i: number) => { storeToStash(this.world, this.content, i); this.hud.markDirty(); },
+      onTake: (i: number) => { takeFromStash(this.world, this.content, i); this.hud.markDirty(); },
       onDodge: () => {
         const p = this.world.player;
         if (!p.alive || this.hud.isModalOpen) return;
@@ -382,6 +382,10 @@ export class Game {
         case "log": this.hud.pushLog(e.msg); break;
       }
     }
+    // Any game event can change what an open panel should show (a kill slays
+    // a boss the travel map cares about, a level-up adds a skill point, ...) —
+    // rebuild it once next frame rather than guessing which events matter.
+    if (events.length > 0) this.hud.markDirty();
     void now;
   }
 }

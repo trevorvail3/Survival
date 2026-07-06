@@ -101,7 +101,9 @@ const cycleTimer = window.setInterval(cycle, 4200);
 
 audio.setScene("menu");
 
-const dismiss = () => { clearInterval(cycleTimer); veil.style.opacity = "0"; window.setTimeout(() => veil.remove(), 1200); };
+// Fading it out is cosmetic; stop it blocking clicks on the game underneath
+// (same z-index as modal panels) the instant the fade starts, not 1.2s later.
+const dismiss = () => { clearInterval(cycleTimer); veil.style.opacity = "0"; veil.style.pointerEvents = "none"; window.setTimeout(() => veil.remove(), 1200); };
 
 veil.querySelector<HTMLButtonElement>("#continueBtn")?.addEventListener("click", () => {
   if (!saved) return;

@@ -76,6 +76,10 @@ export class Hud {
   private log: string[] = [];
   private tipTimer = 0;
   private lastTask: string | null = null;
+  /** True when the open panel needs a DOM rebuild (see markDirty()). */
+  private dirty = true;
+  /** Last rendered hotbar signature (item:qty,...), to skip no-op rebuilds. */
+  private hotbarSig = "";
 
   constructor(private root: HTMLElement, private content: Content, private handlers: HudHandlers) {
     root.innerHTML = "";
@@ -200,6 +204,7 @@ export class Hud {
     this.skillsP.style.display = this.mode === "skills" ? "block" : "none";
     this.stashP.style.display = this.mode === "stash" ? "block" : "none";
     this.backdrop.style.display = this.mode === "none" ? "none" : "block";
+    this.dirty = true;
   }
   togglePack(): void { this.mode = this.mode === "pack" ? "none" : "pack"; this.show(); }
   toggleSkills(): void { this.mode = this.mode === "skills" ? "none" : "skills"; this.show(); }
@@ -208,6 +213,16 @@ export class Hud {
   openTravel(): void { this.mode = "travel"; this.show(); }
   openStash(): void { this.mode = "stash"; this.show(); }
   closeAll(): void { this.mode = "none"; this.show(); }
+
+  /** Force the open panel to rebuild on the next update() — call after any
+   *  action that changes what it shows (craft, build, equip, travel, ...). A
+   *  panel's DOM is otherwise built ONCE per open and left alone: rebuilding it
+   *  every frame (the old behaviour) destroys and recreates every element —
+   *  including whatever the player's mouse is on — so a real human's
+   *  mousedown-to-mouseup (which spans several frames) never lands a `click`,
+   *  since the browser only fires one when mouseup's target is still the
+   *  element mousedown started on. */
+  markDirty(): void { this.dirty = true; }
 
   /** Append a tap-target close control to a modal panel (touch has no [Esc]).
    *  Uses insertAdjacentHTML so it never disturbs handlers already wired on the
@@ -336,20 +351,28 @@ export class Hud {
         <span><span style="width:13px;height:13px;color:#8e2b23;display:inline-block;vertical-align:-2px">${glyph("skull")}</span> ${alive}</span>
       </div>`;
 
-    this.hotbar.innerHTML = HOTBAR.map((id, i) => {
-      const def = this.content.items[id]!;
-      const qty = count(world, id);
-      return `<div class="hud-panel" data-hotbar="${id}" style="width:50px;height:50px;padding:3px;position:relative;opacity:${qty > 0 ? 1 : 0.3};cursor:${qty > 0 ? "pointer" : "default"}">
-        <div style="width:100%;height:100%">${itemIconSVG(def)}</div>
-        <span style="position:absolute;top:1px;left:3px;font-size:10px;color:var(--ink-dim)">${i + 1}</span>
-        <span style="position:absolute;bottom:1px;right:3px;font-size:11px;color:var(--ink)">${qty || ""}</span>
-      </div>`;
-    }).join("");
-    this.hotbar.querySelectorAll<HTMLElement>("[data-hotbar]").forEach((el) => {
-      const id = el.dataset["hotbar"] as ItemId;
-      this.attachInspect(el, () => (count(world, id) > 0 ? { id, qty: count(world, id) } : { id, qty: 0 }));
-      if (count(world, id) > 0) el.onclick = () => { if (el.dataset["longpress"]) { delete el.dataset["longpress"]; return; } this.handlers.onHotbar(id); };
-    });
+    // Rebuild only when a shown quantity actually changed — quantities are
+    // touched from many places (pickup, craft, use, salvage, store/take), too
+    // many to flag individually, so compare a cheap signature instead. See
+    // markDirty() for why rebuilding on every frame breaks real mouse clicks.
+    const hotbarSig = HOTBAR.map((id) => `${id}:${count(world, id)}`).join(",");
+    if (hotbarSig !== this.hotbarSig) {
+      this.hotbarSig = hotbarSig;
+      this.hotbar.innerHTML = HOTBAR.map((id, i) => {
+        const def = this.content.items[id]!;
+        const qty = count(world, id);
+        return `<div class="hud-panel" data-hotbar="${id}" style="width:50px;height:50px;padding:3px;position:relative;opacity:${qty > 0 ? 1 : 0.3};cursor:${qty > 0 ? "pointer" : "default"}">
+          <div style="width:100%;height:100%">${itemIconSVG(def)}</div>
+          <span style="position:absolute;top:1px;left:3px;font-size:10px;color:var(--ink-dim)">${i + 1}</span>
+          <span style="position:absolute;bottom:1px;right:3px;font-size:11px;color:var(--ink)">${qty || ""}</span>
+        </div>`;
+      }).join("");
+      this.hotbar.querySelectorAll<HTMLElement>("[data-hotbar]").forEach((el) => {
+        const id = el.dataset["hotbar"] as ItemId;
+        this.attachInspect(el, () => (count(world, id) > 0 ? { id, qty: count(world, id) } : { id, qty: 0 }));
+        if (count(world, id) > 0) el.onclick = () => { if (el.dataset["longpress"]) { delete el.dataset["longpress"]; return; } this.handlers.onHotbar(id); };
+      });
+    }
 
     this.logEl.innerHTML = `<div class="hud-heading">Log</div>` + (this.log.length ? this.log.map((m) => `<div>${m}</div>`).join("") : `<div style="opacity:.5">…</div>`);
 
@@ -365,11 +388,16 @@ export class Hud {
       this.bossBar.style.display = "none";
     }
 
-    if (this.mode === "pack") this.renderPack(world);
-    else if (this.mode === "settle") this.renderSettlement(world);
-    else if (this.mode === "travel") this.renderTravel(world);
-    else if (this.mode === "skills") this.renderSkills(world);
-    else if (this.mode === "stash") this.renderStash(world);
+    // Rebuild the open panel's DOM only when something actually changed —
+    // see markDirty() for why a per-frame rebuild breaks real mouse clicks.
+    if (this.dirty) {
+      if (this.mode === "pack") this.renderPack(world);
+      else if (this.mode === "settle") this.renderSettlement(world);
+      else if (this.mode === "travel") this.renderTravel(world);
+      else if (this.mode === "skills") this.renderSkills(world);
+      else if (this.mode === "stash") this.renderStash(world);
+      this.dirty = false;
+    }
   }
 
   private renderStash(world: World): void {
