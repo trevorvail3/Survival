@@ -1013,21 +1013,12 @@ export function tick(world: World, content: Content, ctx: { now: number; rng: ()
   if (world.zoneId === "home") regen += pm.rallyRegen;
   if (regen > 0 && p.hp > 0) p.hp = Math.min(p.maxHp, p.hp + regen * dt);
 
-  // Night raids — at home, thinned by the Palisade + Guards and kept outside the
-  // walls; in the wilds they come unchecked.
-  if (nowNight) {
-    const atHome = world.zoneId === "home";
+  // The dead only walk out in the wilds. Your castle is a safe hub — no raids,
+  // no enemies behind the walls. (Destiny-style: danger is on expeditions.)
+  if (nowNight && world.zoneId !== "home") {
     const cap = 16 + world.day * 4;
     const alive = world.enemies.filter((e) => e.state !== "dead").length;
-    let mult = 1;
-    if (atHome) {
-      const palisadeMult = Math.max(0, 1 - world.settlement.structures.palisade * 0.25);
-      const guardMult = Math.max(0.25, 1 - world.settlement.roles.guard * 0.12);
-      mult = palisadeMult * guardMult * playerMods(p).raidMult; // Fortify
-    }
-    if (alive < cap && ctx.rng() < 0.85 * dt * (1 + world.day * 0.12) * mult) spawnNearPlayer(world, content, ctx);
-    // The watch looses arrows: guards cull attackers near home.
-    if (atHome && world.settlement.roles.guard > 0) guardDefense(world, content, ctx, dt, out);
+    if (alive < cap && ctx.rng() < 0.85 * dt * (1 + world.day * 0.12)) spawnNearPlayer(world, content, ctx);
   }
 
   // Enemy AI.
@@ -1148,22 +1139,6 @@ function separate(world: World, e: Enemy): void {
     }
   }
 }
-/** Guards on the wall pick off the dead nearest the settlement centre. */
-function guardDefense(world: World, content: Content, ctx: { rng: () => number }, dt: number, out: GameEvent[]): void {
-  const guards = world.settlement.roles.guard;
-  if (ctx.rng() > guards * 0.2 * dt) return; // ~ one volley every few seconds per guard
-  const h = world.home;
-  const hx = h.x + h.w / 2, hy = h.y + h.h / 2;
-  let best: Enemy | null = null;
-  let bd = 16 * 16;
-  for (const e of world.enemies) {
-    if (e.state === "dead") continue;
-    const d = (e.pos.x - hx) ** 2 + (e.pos.y - hy) ** 2;
-    if (d < bd) { bd = d; best = e; }
-  }
-  if (best) damageEnemy(world, content, ctx, best, Math.round((14 + guards * 4) * playerMods(world.player).guardMult), false, out);
-}
-
 function spawnNearPlayer(world: World, content: Content, ctx: { rng: () => number }): void {
   const p = world.player;
   const walk = makeTileWalkable(world);
