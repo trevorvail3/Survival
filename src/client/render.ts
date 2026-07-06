@@ -15,6 +15,7 @@ import type { Content, Enemy, GroundItem, Prop, TileType, WeaponKind, World } fr
 import { daylight, isNight } from "../core/world.ts";
 import { hashStr } from "../core/rng.ts";
 import { drawSurvivor, DEFAULT_LOOK, type AvatarAnim } from "./avatar.ts";
+import { itemIconSVG } from "./itemIcon.ts";
 
 export const TILE = 30;
 
@@ -35,29 +36,20 @@ function discSprite(key: string, r: number, stops: [number, string][]): HTMLCanv
   return c;
 }
 
-// Resource-node art lifted from the Varath project's SVG icon set (line-art on
-// a 24×24 grid). We render them onto the canvas world as cached tinted images.
-const RES_ART: Record<string, string> = {
-  tree: '<path d="M12 3l5 7h-3l4 6H7l4-6H8z"/><path d="M12 16v5"/>',
-  ore: '<path d="M4 15l4-6 5 2 4-4 3 5-6 8-3-1-4 2z"/><path d="M8 9l1 4 4 1"/>',
-  herb: '<path d="M12 21c0-6-3-9-7-10 4-1 6 1 7 3 1-2 3-4 7-3-4 1-7 4-7 10z"/><path d="M12 11v10"/>',
-  fish: '<path d="M3 12c4-6 12-6 16 0-4 6-12 6-16 0z"/><path d="M19 12c2-1 2-3 2-4 0 1 0 3 0 4s0 3 0 4c0-1 0-3-2-4z"/><circle cx="8" cy="11" r="1"/>',
-};
-const resImgCache = new Map<string, HTMLImageElement>();
-/** A tinted SVG resource icon as an <img> (lazily built, drawn once loaded). */
-function resImage(art: string, color: string): HTMLImageElement | null {
-  const inner = RES_ART[art];
-  if (!inner) return null;
-  const key = art + color;
-  let img = resImgCache.get(key);
+// Bridge an SVG string (e.g. an item icon) onto the canvas world as a cached
+// <img>, drawn once the browser has decoded it.
+const svgImgCache = new Map<string, HTMLImageElement>();
+function svgImg(key: string, svg: string): HTMLImageElement {
+  let img = svgImgCache.get(key);
   if (!img) {
     img = new Image();
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="${color}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
     img.src = "data:image/svg+xml;utf8," + encodeURIComponent(svg);
-    resImgCache.set(key, img);
+    svgImgCache.set(key, img);
   }
   return img;
 }
+// Each gather node shows the ACTUAL item it yields (the same icon as in your pack).
+const NODE_ITEM: Record<string, string> = { tree: "wood", rock: "iron_ore", fishpool: "raw_fish", herbs: "herb" };
 
 const TILE_COLORS: Record<TileType, [string, string]> = {
   grass: ["#33402a", "#28331f"],
@@ -174,7 +166,7 @@ function paintTile(g: CanvasRenderingContext2D, world: World, x: number, y: numb
 }
 
 // --- Props ---
-function drawProp(g: CanvasRenderingContext2D, pr: Prop, now: number): void {
+function drawProp(g: CanvasRenderingContext2D, pr: Prop, now: number, content: Content): void {
   const cx = (pr.pos.x + 0.5) * TILE, cy = (pr.pos.y + 0.5) * TILE;
   const depleted = pr.used;
   g.save();
@@ -240,14 +232,9 @@ function drawProp(g: CanvasRenderingContext2D, pr: Prop, now: number): void {
     case "rock":
     case "herbs":
     case "fishpool": {
-      // Varath SVG resource art, tinted per node and drawn as a canvas image.
-      const NODE: Record<string, { art: string; col: string }> = {
-        tree: { art: "tree", col: "#7fae5a" },
-        rock: { art: "ore", col: "#cdb277" },
-        herbs: { art: "herb", col: "#a7c04a" },
-        fishpool: { art: "fish", col: "#8fbcd0" },
-      };
-      const nd = NODE[pr.kind]!;
+      // The node shows the ACTUAL item icon it yields (ore = knucklestone, etc).
+      const itemId = NODE_ITEM[pr.kind]!;
+      const def = content.items[itemId];
       // A soft ground disc marks it as a workable node; ripple for fishing.
       const disc = discSprite("noded", 32, [[0, "rgba(0,0,0,0.4)"], [1, "rgba(0,0,0,0)"]]);
       g.globalAlpha = depleted ? 0.4 : 1;
@@ -256,11 +243,11 @@ function drawProp(g: CanvasRenderingContext2D, pr: Prop, now: number): void {
         g.strokeStyle = "rgba(120,170,196,0.5)"; g.lineWidth = 1.2;
         for (let i = 1; i <= 2; i++) { g.beginPath(); g.arc(cx, cy + TILE * 0.24, i * 4 + Math.sin(now / 500 + i) * 1.2, 0, Math.PI * 2); g.stroke(); }
       }
-      const img = resImage(nd.art, nd.col);
-      const s = TILE * (depleted ? 0.62 : 0.92);
+      const img = def ? svgImg(`node-${itemId}`, itemIconSVG(def)) : null;
+      const s = TILE * (depleted ? 0.66 : 0.95);
       const bob = depleted ? 0 : Math.sin(now / 720 + cx) * 1.3;
       if (img && img.complete && img.naturalWidth) g.drawImage(img, cx - s / 2, cy - s / 2 + bob, s, s);
-      else { g.fillStyle = nd.col; g.globalAlpha *= 0.5; g.beginPath(); g.arc(cx, cy, TILE * 0.2, 0, Math.PI * 2); g.fill(); }
+      else { g.fillStyle = "#8a7a5a"; g.globalAlpha *= 0.5; g.beginPath(); g.arc(cx, cy, TILE * 0.2, 0, Math.PI * 2); g.fill(); }
       break;
     }
     case "survivor":
@@ -492,7 +479,7 @@ export function drawWorld(
   for (const gi of world.ground) drawGround(g, gi, now);
   for (const pr of world.props) {
     if (pr.pos.x < minX - 1 || pr.pos.x > maxX + 1 || pr.pos.y < minY - 1 || pr.pos.y > maxY + 1) continue;
-    drawProp(g, pr, now);
+    drawProp(g, pr, now, content);
   }
   for (const e of world.enemies) {
     if (e.pos.x < minX - 2 || e.pos.x > maxX + 2 || e.pos.y < minY - 2 || e.pos.y > maxY + 2) continue;
