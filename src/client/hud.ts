@@ -16,6 +16,7 @@ import { canBuild, canCraft, canSpendSkill, capacity, dismantleYield, idleSettle
 import { SKILLS, TREE_NAMES, pointsInTree, xpForNext, nodeUnlocked, type SkillTree } from "../content/skills.ts";
 import { SKILL_META, SKILL_GROUPS, SKILL_IDS, MAX_SKILL, levelForXp, levelProgress, type SkillId } from "../content/trainskills.ts";
 import { RARITY_META, rarityOf, slotPower, characterPower, weaponDamage, armorSoak } from "../content/gear.ts";
+import { drawMinimap } from "./render.ts";
 import { audio } from "./audio.ts";
 
 export interface HudHandlers {
@@ -80,6 +81,7 @@ export class Hud {
   /** Tab-bar buttons keyed by the mode they open, for active-tab highlighting. */
   private tabButtons: Partial<Record<"pack" | "settle" | "travel" | "skills" | "stash", HTMLButtonElement>> = {};
   private dodgeBtn: HTMLButtonElement | null = null;
+  private mmCanvas: HTMLCanvasElement;
 
   constructor(private root: HTMLElement, private content: Content, private handlers: HudHandlers) {
     root.innerHTML = "";
@@ -131,7 +133,26 @@ export class Hud {
     this.audioBtn.onclick = () => { audio.setMuted(!audio.getMuted()); this.audioBtn.innerHTML = ico(audio.getMuted() ? "mute" : "sound"); };
     root.appendChild(this.audioBtn);
 
+    // Minimap — a small always-on overhead view of your surroundings.
+    const mmSize = 120;
+    const mmWrap = document.createElement("div");
+    Object.assign(mmWrap.style, {
+      position: "absolute", right: "12px", top: "152px", width: `${mmSize}px`, height: `${mmSize}px`,
+      borderRadius: "50%", overflow: "hidden", border: "2px solid var(--panel-edge)",
+      boxShadow: "0 4px 18px rgba(0,0,0,0.6)",
+    } as Partial<CSSStyleDeclaration>);
+    this.mmCanvas = document.createElement("canvas");
+    this.mmCanvas.width = mmSize; this.mmCanvas.height = mmSize;
+    mmWrap.appendChild(this.mmCanvas);
+    root.appendChild(mmWrap);
+
     this.buildTabBar();
+  }
+
+  /** Redraw the minimap — call once per frame with the live world. */
+  renderMinimap(world: World): void {
+    const g = this.mmCanvas.getContext("2d");
+    if (g) drawMinimap(g, world, this.mmCanvas.width, 16);
   }
 
   /** The permanent, always-visible OSRS-style tab strip — every panel (and
@@ -147,7 +168,7 @@ export class Hud {
     ];
     const bar = document.createElement("div");
     Object.assign(bar.style, {
-      position: "absolute", right: "12px", top: "156px", zIndex: "10",
+      position: "absolute", right: "12px", top: "284px", zIndex: "10",
       display: "flex", flexDirection: "column", gap: "6px",
     } as Partial<CSSStyleDeclaration>);
     for (const t of TABS) {

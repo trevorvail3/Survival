@@ -51,7 +51,7 @@ function svgImg(key: string, svg: string): HTMLImageElement {
 // Each gather node shows the ACTUAL item it yields (the same icon as in your pack).
 const NODE_ITEM: Record<string, string> = { tree: "wood", rock: "iron_ore", fishpool: "raw_fish", herbs: "herb" };
 
-const TILE_COLORS: Record<TileType, [string, string]> = {
+export const TILE_COLORS: Record<TileType, [string, string]> = {
   grass: ["#33402a", "#28331f"],
   path: ["#4a3d2a", "#3a2f20"],
   dirt: ["#3b3020", "#2c2418"],
@@ -84,7 +84,7 @@ function tileNoise(x: number, y: number): number {
 }
 const clamp = (n: number) => Math.max(0, Math.min(255, Math.round(n)));
 
-function tileAt(world: World, x: number, y: number): TileType {
+export function tileAt(world: World, x: number, y: number): TileType {
   if (x < 0 || y < 0 || x >= world.map.w || y >= world.map.h) return "wall";
   return world.map.tiles[y * world.map.w + x]!;
 }
@@ -654,6 +654,75 @@ export function drawLighting(
     g.fillRect(0, 0, viewW, viewH);
   }
   if (p.infection > 40) { g.fillStyle = `rgba(90,120,40,${(p.infection - 40) / 400})`; g.fillRect(0, 0, viewW, viewH); }
+}
+
+// --- Minimap: a small always-on overhead view centred on the player, tiles +
+// props + enemies simplified to flat colour dots (no lighting/animation —
+// it's a map, not a second viewport). ---
+const MM_ONE_SHOT = new Set<Prop["kind"]>(["chest", "crate", "barrel", "cart", "remains", "survivor"]);
+const MM_PROP_COLOR: Partial<Record<Prop["kind"], string>> = {
+  tree: "#7fae5a", rock: "#cdb277", herbs: "#a7c04a", fishpool: "#8fbcd0",
+  chest: "#c8922e", crate: "#c8922e", barrel: "#c8922e", cart: "#c8922e", remains: "#c8922e",
+  survivor: "#7ac0e0", hearth: "#e08a3a", forge: "#e08a3a", workbench: "#e08a3a",
+  townboard: "#e6dcc4", maptable: "#e6dcc4", waystone: "#e6dcc4", stash: "#e6dcc4",
+};
+
+export function drawMinimap(g: CanvasRenderingContext2D, world: World, size: number, radiusTiles: number): void {
+  const p = world.player;
+  const scale = size / (radiusTiles * 2);
+  g.clearRect(0, 0, size, size);
+  g.fillStyle = "#050505";
+  g.fillRect(0, 0, size, size);
+
+  const x0 = Math.floor(p.pos.x - radiusTiles), x1 = Math.ceil(p.pos.x + radiusTiles);
+  const y0 = Math.floor(p.pos.y - radiusTiles), y1 = Math.ceil(p.pos.y + radiusTiles);
+  const toMM = (wx: number, wy: number): [number, number] => [(wx - p.pos.x + radiusTiles) * scale, (wy - p.pos.y + radiusTiles) * scale];
+
+  for (let y = y0; y <= y1; y++) {
+    for (let x = x0; x <= x1; x++) {
+      if (x < 0 || y < 0 || x >= world.map.w || y >= world.map.h) continue;
+      const t = tileAt(world, x, y);
+      const [mx, my] = toMM(x, y);
+      g.fillStyle = TILE_COLORS[t][0];
+      g.fillRect(mx, my, scale + 0.6, scale + 0.6);
+    }
+  }
+
+  for (const pr of world.props) {
+    // Spent one-shot searchables/rescues fade from the map; resource nodes and
+    // stations stay marked even while temporarily depleted or mid-respawn.
+    if (pr.used && MM_ONE_SHOT.has(pr.kind)) continue;
+    const col = MM_PROP_COLOR[pr.kind];
+    if (!col || Math.abs(pr.pos.x - p.pos.x) > radiusTiles || Math.abs(pr.pos.y - p.pos.y) > radiusTiles) continue;
+    const [mx, my] = toMM(pr.pos.x + 0.5, pr.pos.y + 0.5);
+    g.fillStyle = col;
+    g.beginPath(); g.arc(mx, my, 2, 0, Math.PI * 2); g.fill();
+  }
+
+  for (const e of world.enemies) {
+    if (e.state === "dead") continue;
+    if (Math.abs(e.pos.x - p.pos.x) > radiusTiles || Math.abs(e.pos.y - p.pos.y) > radiusTiles) continue;
+    const [mx, my] = toMM(e.pos.x, e.pos.y);
+    g.fillStyle = e.boss ? "#e6b24e" : "#c23b2c";
+    g.beginPath(); g.arc(mx, my, e.boss ? 3.5 : 2.2, 0, Math.PI * 2); g.fill();
+    if (e.boss) { g.strokeStyle = "#3a1512"; g.lineWidth = 1; g.stroke(); }
+  }
+
+  // The player: a fixed dot at the centre with a small wedge for facing.
+  const cx = size / 2, cy = size / 2;
+  g.fillStyle = "#fff2cf";
+  g.beginPath(); g.arc(cx, cy, 3, 0, Math.PI * 2); g.fill();
+  g.save();
+  g.translate(cx, cy);
+  g.rotate(p.facing);
+  g.fillStyle = "#fff2cf";
+  g.beginPath(); g.moveTo(6, 0); g.lineTo(1, -3); g.lineTo(1, 3); g.closePath(); g.fill();
+  g.restore();
+
+  // A soft vignette so the square canvas reads as a rounded map, not a tile dump.
+  const vg = g.createRadialGradient(cx, cy, size * 0.32, cx, cy, size * 0.5);
+  vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(0,0,0,0.85)");
+  g.fillStyle = vg; g.fillRect(0, 0, size, size);
 }
 
 // --- shape helpers ---

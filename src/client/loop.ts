@@ -161,6 +161,7 @@ export class Game {
     drawLighting(this.g, world, sc, this.viewW, this.viewH, this.zoom, this.fx.activeLights(), playerMods(p).lightBonus);
 
     this.hud.update(world, this.hoverPrompt(), { forge: this.near("forge"), workshop: this.near("workbench") });
+    this.hud.renderMinimap(world);
     this.input.endFrame();
 
     // Autosave the run every few seconds while alive.
