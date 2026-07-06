@@ -3,7 +3,7 @@
  * -------------------
  * UI-chrome glyphs — tiny inline SVGs on a 24×24 grid that inherit `currentColor`,
  * lifted in shape from the sibling `world` project's glyph system and redrawn for
- * a survival-horror HUD (vitals, infection, day/night, pack, workbench).
+ * Ashfall's HUD (vitals, infection, day/night, pack, workbench).
  * Monochrome line-art: color comes from the surrounding text, never baked in.
  */
 

@@ -145,8 +145,6 @@ export class Game {
 
     // --- Onboarding: state-driven tips + refresh the objective tracker ---
     if (p.alive) {
-      if (p.hunger < 25) this.tut("hungry");
-      if (p.thirst < 25) this.tut("thirsty");
       if (p.infection > 0) this.tut("infected");
       if (world.enemies.some((e) => e.boss && (e.state === "hunt" || e.state === "attack"))) this.tut("boss");
     }
@@ -359,8 +357,6 @@ export class Game {
         case "salvage": audio.play("craft"); this.hud.pushLog(`Salvaged into ${e.qty}× ${this.content.items[e.id]?.name ?? e.id}.`); break;
         case "victory": audio.play("levelup"); audio.play("daybreak"); this.hud.showBanner("The Hold is Cleansed", "The Rot-Mother is dead. The plague ends with you.", 6000); this.hud.pushLog("You have won. The Hold is free — range on if you wish."); break;
         case "heal": audio.play("heal"); break;
-        case "eat": audio.play("eat"); break;
-        case "drink": audio.play("drink"); break;
         case "cure": audio.play("heal"); this.hud.pushLog("The fever recedes."); break;
         case "equip": audio.play("equip"); break;
         case "dayBreak": audio.play("daybreak"); if (this.world.zoneId === "home") audio.setScene("day"); this.hud.showBanner(`Day ${e.day}`, "You saw the dawn.", 2200); break;

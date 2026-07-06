@@ -1,11 +1,14 @@
 /**
  * src/client/avatar.ts
  * --------------------
- * The survivor, drawn top-down and rotated to face the aim direction. Adapts the
- * sibling `world` project's avatar technique — a figure composed from layered
- * parts (shadow → pack → body → head → arms → weapon) with a swing driven by an
- * animation phase, and a per-weapon `drawWeapon` that rides in the hands the way
- * `world`'s `drawTool` rode the arm. Everything is Canvas 2D; no sprites.
+ * The survivor as a proper 2D character, not a top-down blob that spins to face
+ * the cursor. Matches the sibling `world` project's technique: the figure is
+ * drawn upright in one of four fixed poses (up/down/left/right) picked from the
+ * facing angle — never rotated — with left mirrored from right via a horizontal
+ * flip, and "up" swapping to a back-of-head view with no face. Body parts layer
+ * shadow → legs → torso → far arm → near arm/weapon → head, each nudged by a
+ * walk-cycle bob/stride/lift the same way `world`'s avatar rig works. Everything
+ * is Canvas 2D; no sprites.
  */
 
 import type { WeaponKind } from "../core/types.ts";
@@ -44,9 +47,22 @@ function shade(hex: string, amt: number): string {
   return `#${c(r)}${c(g)}${c(b)}`;
 }
 
+type Facing4 = "up" | "down" | "left" | "right";
+
+/** Bucket a continuous facing angle (atan2 radians) into one of 4 fixed poses. */
+function facing4(facing: number): Facing4 {
+  const a = ((facing % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2); // 0..2π
+  if (a < Math.PI * 0.25 || a >= Math.PI * 1.75) return "right";
+  if (a < Math.PI * 0.75) return "down";
+  if (a < Math.PI * 1.25) return "left";
+  return "up";
+}
+
 /**
  * Draw the survivor centred at (cx, cy) in device pixels, at scale `s`
- * (1 ≈ a 1-tile figure when s = TILE), rotated to `facing` (radians).
+ * (1 ≈ a 1-tile figure when s = TILE). Never rotates: `facing` (radians) is
+ * bucketed to up/down/left/right, drawn upright, and left is the right pose
+ * mirrored — the same fixed-pose convention `world`'s avatar uses.
  */
 export function drawSurvivor(
   g: CanvasRenderingContext2D,
@@ -60,23 +76,31 @@ export function drawSurvivor(
   armorTone?: string | null,
 ): void {
   const t = anim.now;
-  // Walk bob: a subtle scale pulse so movement reads even top-down.
   const step = t / 130;
-  const bob = anim.moving ? 1 + Math.sin(step) * 0.04 : 1 + Math.sin(t / 600) * 0.015;
+  // Walk bob: a gentle vertical bounce, plus a per-step foot lift/stride.
+  const bob = anim.moving ? -Math.abs(Math.sin(step)) * s * 0.05 : Math.sin(t / 600) * s * 0.015;
+  const stride = anim.moving ? Math.sin(step) * s * 0.1 : 0;
+  const liftL = anim.moving ? Math.max(0, Math.sin(step)) * s * 0.05 : 0;
+  const liftR = anim.moving ? Math.max(0, -Math.sin(step)) * s * 0.05 : 0;
 
-  // Ground shadow (drawn un-rotated, on the floor).
+  const dir = facing4(facing);
+  const flip = dir === "left";
+  const back = dir === "up"; // shows the back of the head, no face
+  const sideOn = dir === "left" || dir === "right"; // a 3/4 turn, not head-on
+
+  // Ground shadow (fixed, never rotates or flips).
   g.save();
   g.globalAlpha = anim.rolling ? 0.15 : 0.32;
   g.fillStyle = "#000";
   g.beginPath();
-  g.ellipse(cx, cy + s * 0.06, s * 0.42, s * 0.24, 0, 0, Math.PI * 2);
+  g.ellipse(cx, cy + s * 0.3, s * 0.4, s * 0.16, 0, 0, Math.PI * 2);
   g.fill();
   g.restore();
 
   g.save();
   g.translate(cx, cy);
-  g.rotate(facing + Math.PI / 2); // sprite is authored facing "up"
-  g.scale(bob, bob);
+  if (flip) g.scale(-1, 1); // draw the "right" pose, mirrored
+  g.translate(0, bob);
 
   const R = (u: number) => u * s; // unit → pixels
 
@@ -84,25 +108,25 @@ export function drawSurvivor(
   g.fillStyle = look.pack;
   g.strokeStyle = shade(look.pack, -0.4);
   g.lineWidth = R(0.03);
-  rr(g, R(-0.2), R(0.06), R(0.4), R(0.34), R(0.08));
+  rr(g, R(-0.2), R(-0.02), R(0.4), R(0.34), R(0.08));
   g.fill();
   g.stroke();
 
-  // Legs (two stubs), animated with an alternating stride when moving.
-  const stride = anim.moving ? Math.sin(step) * R(0.1) : 0;
+  // Legs (two stubs), lifting on alternating steps.
   g.fillStyle = shade(look.jacket, -0.35);
-  leg(g, R(-0.14), R(0.18) + stride, R(0.13), R(0.26));
-  leg(g, R(0.14), R(0.18) - stride, R(0.13), R(0.26));
+  leg(g, R(-0.14) + (sideOn ? R(0.06) : stride), R(0.14) - liftL, R(0.13), R(0.26));
+  leg(g, R(0.14) - (sideOn ? R(0.06) : stride), R(0.14) - liftR, R(0.13), R(0.26));
 
-  // Torso — the jacket, a rounded capsule.
-  const grad = g.createLinearGradient(R(-0.3), 0, R(0.3), 0);
+  // Torso — the jacket, a rounded capsule. Turned 3/4 (offset) when side-on.
+  const tx = sideOn ? R(0.05) : 0;
+  const grad = g.createLinearGradient(tx + R(-0.3), 0, tx + R(0.3), 0);
   grad.addColorStop(0, shade(look.jacket, -0.25));
   grad.addColorStop(0.5, look.jacket);
   grad.addColorStop(1, shade(look.jacket, -0.25));
   g.fillStyle = anim.hurt ? "#7c2f28" : grad;
   g.strokeStyle = shade(look.jacket, 0.35); // light rim so the figure reads on dark ground
   g.lineWidth = R(0.04);
-  rr(g, R(-0.26), R(-0.24), R(0.52), R(0.5), R(0.16));
+  rr(g, tx + R(-0.26), R(-0.28), R(0.52), R(0.5), R(0.16));
   g.fill();
   g.stroke();
 
@@ -111,48 +135,50 @@ export function drawSurvivor(
     g.fillStyle = armorTone;
     g.strokeStyle = shade(armorTone, -0.4);
     g.lineWidth = R(0.03);
-    rr(g, R(-0.2), R(-0.18), R(0.4), R(0.38), R(0.1));
+    rr(g, tx + R(-0.2), R(-0.22), R(0.4), R(0.38), R(0.1));
     g.fill();
     g.stroke();
     g.strokeStyle = shade(armorTone, 0.4);
     g.lineWidth = R(0.02);
-    g.beginPath(); g.moveTo(0, R(-0.16)); g.lineTo(0, R(0.18)); g.stroke();
+    g.beginPath(); g.moveTo(tx, R(-0.2)); g.lineTo(tx, R(0.14)); g.stroke();
   }
 
-  // Arms + weapon. The weapon-side arm sweeps through the swing.
+  // Arms + weapon. The far arm sits behind the torso; the near arm holds the
+  // weapon and swings forward through an attack (no more whole-body rotation).
   const swingAmt = anim.swing != null ? (1 - anim.swing) : 0;
-  // Arm rest angle points forward (up in local space).
-  const armReach = R(0.34);
-  // Melee: sweep from one side to the other across the swing.
-  const sweep = weapon === "bow" ? 0 : (swingAmt - 0.5) * 1.9;
+  const armReach = R(0.36);
+  const sweep = weapon === "bow" ? 0 : (swingAmt - 0.5) * 1.6;
+  const farShoulderX = sideOn ? R(-0.02) : R(0.18);
+  const nearShoulderX = sideOn ? R(0.1) : R(-0.18);
 
-  // Far arm (holds steady / supports).
-  drawArm(g, R(0.18), R(-0.12), R(0.16) + sweep * R(0.05), armReach * 0.7, look, R);
-  // Near arm holds the weapon.
-  const handX = Math.sin(-0.16 + sweep) * armReach;
-  const handY = -Math.cos(-0.16 + sweep) * armReach;
-  drawArm(g, R(-0.18), R(-0.12), handX, handY, look, R);
+  drawArm(g, farShoulderX, R(-0.16), farShoulderX + R(0.02), R(-0.16) + armReach * 0.6, look, R);
+  const handX = nearShoulderX + Math.sin(sweep) * armReach * 0.5;
+  const handY = R(-0.16) + armReach * 0.75 - Math.cos(sweep) * armReach * 0.25;
+  drawArm(g, nearShoulderX, R(-0.16), handX, handY, look, R);
 
   // Weapon in the near hand, angled along the swing.
   g.save();
   g.translate(handX, handY);
-  g.rotate(sweep * 0.9);
+  g.rotate(-Math.PI / 2 + sweep * 0.9); // rest pointing "up" from the hand
   drawWeapon(g, R, weapon);
   g.restore();
 
-  // Head / hood on top (front).
+  // Head / hood on top.
+  const headX = sideOn ? R(0.04) : 0;
   g.fillStyle = look.hood;
   g.strokeStyle = shade(look.hood, 0.4);
   g.lineWidth = R(0.03);
   g.beginPath();
-  g.arc(0, R(-0.05), R(0.2), 0, Math.PI * 2);
+  g.arc(headX, R(-0.42), R(0.2), 0, Math.PI * 2);
   g.fill();
   g.stroke();
-  // A sliver of face at the front of the hood.
-  g.fillStyle = shade(look.skin, -0.1);
-  g.beginPath();
-  g.ellipse(0, R(-0.14), R(0.1), R(0.08), 0, 0, Math.PI * 2);
-  g.fill();
+  // A sliver of face — hidden from the back view, offset toward the turn.
+  if (!back) {
+    g.fillStyle = shade(look.skin, -0.1);
+    g.beginPath();
+    g.ellipse(headX + (sideOn ? R(0.06) : 0), R(-0.4), R(0.1), R(0.08), 0, 0, Math.PI * 2);
+    g.fill();
+  }
 
   g.restore();
 }

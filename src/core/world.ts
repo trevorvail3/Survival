@@ -4,7 +4,7 @@
  * The simulation. Movement is point-and-click (like the sibling `world`
  * project): the player is given an ORDER — move here, search that, kill that —
  * and walks an A* path to carry it out, fighting on weapon-speed ticks once in
- * reach. The core also runs survival meters, the risen's AI, day/night, night
+ * reach. The core also runs the risen's AI, day/night, expedition-only night
  * raids, and the settlement (building, upgrades, rescued members' tribute).
  *
  * Effects are emitted as `GameEvent` data the client drains for audio + FX; the
@@ -84,8 +84,6 @@ export type GameEvent =
   | { t: "salvage"; id: ItemId; qty: number }
   | { t: "victory" }
   | { t: "heal" }
-  | { t: "eat" }
-  | { t: "drink" }
   | { t: "cure" }
   | { t: "equip" }
   | { t: "dayBreak"; day: number }
@@ -296,9 +294,10 @@ export function spendSkill(world: World, nodeId: string): boolean {
   return true;
 }
 
-/** Settler cap: Quarters level plus any Quartermaster bonus. */
+/** Settler cap: Quarters level, the Palisade's reclaimed bailey, plus any
+ *  Quartermaster bonus. */
 export function capacity(world: World): number {
-  return settlementCapacity(world.settlement.structures.quarters) + playerMods(world.player).capBonus;
+  return settlementCapacity(world.settlement.structures.quarters) + world.settlement.structures.palisade + playerMods(world.player).capBonus;
 }
 
 /** A structure's next-level cost, reduced by Master Builder. */
@@ -323,8 +322,6 @@ export function createWorld(content: Content, rng: () => number): World {
     facing: -Math.PI / 2,
     hp: 100,
     maxHp: 100,
-    hunger: 80,
-    thirst: 70,
     path: [],
     order: { type: "none" },
     inv,
@@ -710,8 +707,6 @@ function downPlayer(world: World, content: Content, rng: () => number, out: Game
   }
   p.hp = Math.max(1, Math.round(p.maxHp * 0.5));
   p.infection = 0;
-  p.hunger = Math.max(p.hunger, 25);
-  p.thirst = Math.max(p.thirst, 25);
   p.nextAttack = 0; p.dashUntil = 0; p.invulnUntil = 0;
   if (inField) travelTo(world, content, rng, "home", out);
   else { p.pos = { x: world.entry.x + 0.5, y: world.entry.y + 0.5 }; stop(world); }
@@ -801,8 +796,6 @@ export function restAtHearth(world: World, content: Content, rng: () => number, 
     return;
   }
   p.hp = p.maxHp;
-  p.hunger = Math.max(0, p.hunger - 10);
-  p.thirst = Math.max(0, p.thirst - 12);
   p.infection = Math.max(0, p.infection - 40);
   // Sleeping through to dawn: a day passes and your settlers bring their tribute.
   world.timeOfDay = 0.28;
@@ -857,8 +850,6 @@ export function useSlot(world: World, content: Content, slotIndex: number, out: 
   const heal = playerMods(p).healMult; // Field Medic
   switch (def.use) {
     case "heal": p.hp = Math.min(p.maxHp, p.hp + (def.heal ?? 0) * heal); removeItem(p, slot.id, 1); out.push({ t: "heal" }); break;
-    case "food": p.hunger = Math.min(100, p.hunger + (def.food ?? 0)); if (def.heal) p.hp = Math.min(p.maxHp, p.hp + def.heal * heal); removeItem(p, slot.id, 1); out.push({ t: "eat" }); break;
-    case "drink": p.thirst = Math.min(100, p.thirst + (def.drink ?? 0)); removeItem(p, slot.id, 1); out.push({ t: "drink" }); break;
     case "cure":
       p.infection = Math.max(0, p.infection - (def.cure ?? 0));
       if (def.heal) p.hp = Math.min(p.maxHp, p.hp + def.heal * heal);
@@ -997,16 +988,8 @@ export function tick(world: World, content: Content, ctx: { now: number; rng: ()
 
   if (!p.alive) return;
 
-  // Survival (Iron Gut slows the drain).
-  const decay = playerMods(p).decayMult;
-  p.hunger = Math.max(0, p.hunger - 0.26 * decay * dt);
-  p.thirst = Math.max(0, p.thirst - 0.38 * decay * dt);
-  let bleed = 0;
-  if (p.hunger <= 0) bleed += 2.5;
-  if (p.thirst <= 0) bleed += 3.5;
-  if (p.infection >= 100) bleed += 4;
+  if (p.infection >= 100) p.hp -= 4 * dt;
   else if (p.infection > 0) p.infection = Math.max(0, p.infection - 0.12 * dt);
-  if (bleed > 0) p.hp -= bleed * dt;
   // Regeneration: Second Wind everywhere, Rally within your own walls.
   const pm = playerMods(p);
   let regen = pm.regen;
@@ -1093,7 +1076,9 @@ function deliverTribute(world: World, content: Content, rng: () => number, out: 
   for (let i = 0; i < s.roles.gatherer; i++) { wood += 1; if (rng() < 0.6) stone += 1; if (rng() < 0.4) ore += 1; }
   // Foragers bring food and physic.
   for (let i = 0; i < s.roles.forager; i++) { food += 1; if (rng() < 0.6) herb += 1; }
-  // Idle hands still scrape a little together; guards hold the wall, no tribute.
+  // Guards work the quarry and keep the forge fed — a steady ore supply for gear.
+  for (let i = 0; i < s.roles.guard; i++) { ore += 1; if (rng() < 0.5) stone += 1; }
+  // Idle hands still scrape a little together.
   for (let i = 0; i < idle; i++) { if (rng() < 0.5) food += 1; else wood += 1; }
   // Bountiful sends your folk home with more.
   const t = playerMods(world.player).tributeMult;
